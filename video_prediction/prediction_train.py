@@ -206,7 +206,7 @@ def main(unused_argv):
   if FLAGS.pretrained_model:
     saver.restore(sess, FLAGS.pretrained_model)
 
-  #tf.train.start_queue_runners(sess)
+  tf.train.start_queue_runners(sess)
   sess.run(tf.initialize_all_variables())
 
   tf.logging.info('iteration number, cost')
