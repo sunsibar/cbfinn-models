@@ -34,7 +34,7 @@ VAL_INTERVAL = 200
 SAVE_INTERVAL = 2000
 
 # tf record data location:
-DATA_DIR = 'push/push_testnovel' # 'push/push_train'   # '../../../../data/bouncing_circles/short_sequences/static_simple_1_bcs'
+DATA_DIR = '../../../../data/robots_pushing/push/push_train' # 'push/push_train'   # '../../../../data/bouncing_circles/short_sequences/static_simple_1_bcs'
 
 # local output directory
 OUT_DIR = './train_out/firsttry'
@@ -242,7 +242,7 @@ def main(unused_argv):
   tf.logging.info('Saving model.')
   saver.save(sess, FLAGS.output_dir + '/model')
   tf.logging.info('Training complete')
-  tf.logging.flush()
+  #tf.logging.flush() --> NotImplementedError
 
 
 if __name__ == '__main__':
