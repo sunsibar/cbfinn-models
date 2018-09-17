@@ -34,10 +34,10 @@ VAL_INTERVAL = 200
 SAVE_INTERVAL = 2000
 
 # tf record data location:
-DATA_DIR = 'push/push_train'
+DATA_DIR = 'push/push_testnovel' # 'push/push_train'   # '../../../../data/bouncing_circles/short_sequences/static_simple_1_bcs'
 
 # local output directory
-OUT_DIR = '/tmp/data'
+OUT_DIR = './train_out/firsttry'
 
 FLAGS = flags.FLAGS
 
@@ -151,7 +151,7 @@ class Model(object):
     # L2 loss, PSNR for eval.
     loss, psnr_all = 0.0, 0.0
     for i, x, gx in zip(
-        range(len(gen_images)), images[FLAGS.context_frames:],
+        list(range(len(gen_images))), images[FLAGS.context_frames:],
         gen_images[FLAGS.context_frames - 1:]):
       recon_cost = mean_squared_error(x, gx)
       psnr_i = peak_signal_to_noise_ratio(x, gx)
@@ -162,7 +162,7 @@ class Model(object):
       loss += recon_cost
 
     for i, state, gen_state in zip(
-        range(len(gen_states)), states[FLAGS.context_frames:],
+        list(range(len(gen_states))), states[FLAGS.context_frames:],
         gen_states[FLAGS.context_frames - 1:]):
       state_cost = mean_squared_error(state, gen_state) * 1e-4
       summaries.append(
@@ -183,7 +183,7 @@ class Model(object):
 
 def main(unused_argv):
 
-  print 'Constructing models and inputs.'
+  print('Constructing models and inputs.')
   with tf.variable_scope('model', reuse=None) as training_scope:
     images, actions, states = build_tfrecord_input(training=True)
     model = Model(images, actions, states, FLAGS.sequence_length)
@@ -193,7 +193,7 @@ def main(unused_argv):
     val_model = Model(val_images, val_actions, val_states,
                       FLAGS.sequence_length, training_scope)
 
-  print 'Constructing saver.'
+  print('Constructing saver.')
   # Make saver.
   saver = tf.train.Saver(
       tf.get_collection(tf.GraphKeys.VARIABLES), max_to_keep=0)
