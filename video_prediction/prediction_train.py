@@ -34,10 +34,10 @@ VAL_INTERVAL = 200
 SAVE_INTERVAL = 2000
 
 # tf record data location:
-DATA_DIR = 'push/push_train'
+DATA_DIR = 'push/push_testnovel' # 'push/push_train'   # '../../../../data/bouncing_circles/short_sequences/static_simple_1_bcs'
 
 # local output directory
-OUT_DIR = '/tmp/data'
+OUT_DIR = './train_out/firsttry'
 
 FLAGS = flags.FLAGS
 
