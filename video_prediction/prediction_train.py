@@ -229,7 +229,7 @@ def main(unused_argv):
 
     # Print info: iteration #, cost.
     tf.logging.info(str(itr) + ' ' + str(cost))
-    logger.info(str(itr) + ' ' + str(cost))
+    logging.info(str(itr) + ' ' + str(cost))
 
 
     if (itr) % VAL_INTERVAL == 2:
