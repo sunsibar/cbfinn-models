@@ -17,6 +17,7 @@
 
 import numpy as np
 import tensorflow as tf
+import logging
 
 from tensorflow.python.platform import app
 from tensorflow.python.platform import flags
@@ -198,6 +199,7 @@ def main(unused_argv):
   saver = tf.train.Saver(
       tf.get_collection(tf.GraphKeys.VARIABLES), max_to_keep=0)
 
+  logger = logging.getLogger('non-tf-logger')
   # Make training session.
   sess = tf.InteractiveSession()
   summary_writer = tf.summary.FileWriter(
@@ -207,9 +209,10 @@ def main(unused_argv):
     saver.restore(sess, FLAGS.pretrained_model)
 
   tf.train.start_queue_runners(sess)
-  sess.run(tf.initialize_all_variables())
+  sess.run(tf.global_variables_initializer())
 
   tf.logging.info('iteration number, cost')
+  logging.info('iteration number, cost')
 
   # Run training.
   for itr in range(FLAGS.num_iterations):
@@ -222,6 +225,8 @@ def main(unused_argv):
 
     # Print info: iteration #, cost.
     tf.logging.info(str(itr) + ' ' + str(cost))
+    logger.info(str(itr) + ' ' + str(cost))
+
 
     if (itr) % VAL_INTERVAL == 2:
       # Run through validation set.
