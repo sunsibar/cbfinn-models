@@ -25,6 +25,10 @@ from tensorflow.python.platform import flags
 from prediction_input import build_tfrecord_input
 from prediction_model import construct_model
 
+import os, sys
+sys.path.append(os.path.abspath(os.path.join(os.path.dirname(__file__), '../../../')))
+from src.utils.utils import set_logger
+
 # How often to record tensorboard summaries.
 SUMMARY_INTERVAL = 40
 
@@ -199,7 +203,7 @@ def main(unused_argv):
   saver = tf.train.Saver(
       tf.get_collection(tf.GraphKeys.VARIABLES), max_to_keep=0)
 
-  logger = logging.getLogger('non-tf-logger')
+  set_logger("./logs/")
   # Make training session.
   sess = tf.InteractiveSession()
   summary_writer = tf.summary.FileWriter(
