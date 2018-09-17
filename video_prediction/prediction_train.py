@@ -216,7 +216,7 @@ def main(unused_argv):
   sess.run(tf.global_variables_initializer())
 
   tf.logging.info('iteration number, cost')
-  logging.info('iteration number, cost')
+  #logging.info('iteration number, cost')
 
   # Run training.
   for itr in range(FLAGS.num_iterations):
@@ -229,7 +229,7 @@ def main(unused_argv):
 
     # Print info: iteration #, cost.
     tf.logging.info(str(itr) + ' ' + str(cost))
-    logging.info(str(itr) + ' ' + str(cost))
+    #logging.info(str(itr) + ' ' + str(cost))
 
 
     if (itr) % VAL_INTERVAL == 2:
