@@ -109,7 +109,7 @@ def construct_model(images,
         prev_image = image
 
       # Predicted state is always fed back in
-      state_action = tf.concat( [action, current_state],1)
+      state_action = tf.concat([action, current_state], 1)
 
       enc0 = slim.layers.conv2d(
           prev_image,
@@ -144,7 +144,7 @@ def construct_model(images,
       smear = tf.tile(
           smear, [1, int(enc2.get_shape()[1]), int(enc2.get_shape()[2]), 1])
       if use_state:
-        enc2 = tf.concat( [enc2, smear], 3)
+        enc2 = tf.concat([enc2, smear], 3)
       enc3 = slim.layers.conv2d(
           enc2, hidden4.get_shape()[3], [1, 1], stride=1, scope='conv4')
 
@@ -158,7 +158,7 @@ def construct_model(images,
           enc4, lstm_state6, lstm_size[5], scope='state6')  # 16x16
       hidden6 = tf_layers.layer_norm(hidden6, scope='layer_norm7')
       # Skip connection.
-      hidden6 = tf.concat(3, [hidden6, enc1])  # both 16x16
+      hidden6 = tf.concat([hidden6, enc1], 3)  # both 16x16
 
       enc5 = slim.layers.conv2d_transpose(
           hidden6, hidden6.get_shape()[3], 3, stride=2, scope='convt2')
@@ -235,7 +235,10 @@ def stp_transformation(prev_image, stp_input, num_masks):
     List of images transformed by the predicted STP parameters.
   """
   # Only import spatial transformer if needed.
-  from spatial_transformer import transformer
+  import os
+  import sys
+  sys.path.insert(1, os.path.join(sys.path[0], '..'))
+  from transformer.spatial_transformer import transformer
 
   identity_params = tf.convert_to_tensor(
       np.array([1.0, 0.0, 0.0, 0.0, 1.0, 0.0], np.float32))
@@ -244,7 +247,7 @@ def stp_transformation(prev_image, stp_input, num_masks):
     params = slim.layers.fully_connected(
         stp_input, 6, scope='stp_params' + str(i),
         activation_fn=None) + identity_params
-    transformed.append(transformer(prev_image, params))
+    transformed.append(transformer(prev_image, params, (prev_image.get_shape()[1], prev_image.get_shape()[2])))   # Note: noob added the last argument to transformer here, could be that height and width are reversed
 
   return transformed
 
@@ -314,7 +317,7 @@ def dna_transformation(prev_image, dna_input):
           tf.expand_dims(
               tf.slice(prev_image_pad, [0, xkern, ykern, 0],
                        [-1, image_height, image_width, -1]), [3]))
-  inputs = tf.concat( inputs, 3)
+  inputs = tf.concat(inputs, 3)
 
   # Normalize channels to 1.
   kernel = tf.nn.relu(dna_input - RELU_SHIFT) + RELU_SHIFT

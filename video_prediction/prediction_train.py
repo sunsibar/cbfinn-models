@@ -17,12 +17,17 @@
 
 import numpy as np
 import tensorflow as tf
+import logging
 
 from tensorflow.python.platform import app
 from tensorflow.python.platform import flags
 
 from prediction_input import build_tfrecord_input
 from prediction_model import construct_model
+
+import os, sys
+sys.path.append(os.path.abspath(os.path.join(os.path.dirname(__file__), '../../../')))
+from src.utils.utils import set_logger
 
 # How often to record tensorboard summaries.
 SUMMARY_INTERVAL = 40
@@ -36,6 +41,8 @@ SAVE_INTERVAL = 2000
 # tf record data location:
 #DATA_DIR = 'push/push_testnovel' # 'push/push_train'   # '../../../../data/bouncing_circles/short_sequences/static_simple_1_bcs'
 DATA_DIR = '../../../../data/gen/debug_bouncing_circles/static_simple_2_bcs/tfrecords'
+#DATA_DIR = '../../../../data/robots_pushing/push/push_train' # 'push/push_train'   # '../../../../data/bouncing_circles/short_sequences/static_simple_1_bcs'
+
 
 # local output directory
 OUT_DIR = './train_out/firsttry'
@@ -118,9 +125,9 @@ class Model(object):
     summaries = []
 
     # Split into timesteps.
-    actions = tf.split(actions, actions.get_shape()[1], axis=1)
+    actions = tf.split(actions, actions.get_shape()[1], 1)
     actions = [tf.squeeze(act) for act in actions]
-    states = tf.split(states, states.get_shape()[1], axis=1)
+    states = tf.split(states, states.get_shape()[1], 1)
     states = [tf.squeeze(st) for st in states]
     images = tf.split(images, images.get_shape()[1], 1)
     images = [tf.squeeze(img) for img in images]
@@ -162,8 +169,8 @@ class Model(object):
       psnr_i = peak_signal_to_noise_ratio(x, gx)
       psnr_all += psnr_i
       summaries.append(
-          tf.scalar_summary(prefix + '_recon_cost' + str(i), recon_cost))
-      summaries.append(tf.scalar_summary(prefix + '_psnr' + str(i), psnr_i))
+          tf.summary.scalar(name=prefix.name + '_recon_cost' + str(i), tensor=recon_cost))
+      summaries.append(tf.summary.scalar(name=prefix.name + '_psnr' + str(i), tensor=psnr_i))
       loss += recon_cost
 
     for i, state, gen_state in zip(
@@ -171,19 +178,19 @@ class Model(object):
         gen_states[FLAGS.context_frames - 1:]):
       state_cost = mean_squared_error(state, gen_state) * 1e-4
       summaries.append(
-          tf.scalar_summary(prefix + '_state_cost' + str(i), state_cost))
+          tf.summary.scalar(name=prefix.name + '_state_cost' + str(i), tensor=state_cost))
       loss += state_cost
-    summaries.append(tf.scalar_summary(prefix + '_psnr_all', psnr_all))
+    summaries.append(tf.summary.scalar(name=prefix.name + '_psnr_all', tensor=psnr_all))
     self.psnr_all = psnr_all
 
     self.loss = loss = loss / np.float32(len(images) - FLAGS.context_frames)
 
-    summaries.append(tf.scalar_summary(prefix + '_loss', loss))
+    summaries.append(tf.summary.scalar(name=prefix.name + '_loss', tensor=loss))
 
     self.lr = tf.placeholder_with_default(FLAGS.learning_rate, ())
 
     self.train_op = tf.train.AdamOptimizer(self.lr).minimize(loss)
-    self.summ_op = tf.merge_summary(summaries)
+    self.summ_op = tf.summary.merge(summaries)
 
 
 def main(unused_argv):
@@ -203,18 +210,20 @@ def main(unused_argv):
   saver = tf.train.Saver(
       tf.get_collection(tf.GraphKeys.VARIABLES), max_to_keep=0)
 
+  set_logger("./logs/")
   # Make training session.
   sess = tf.InteractiveSession()
-  summary_writer = tf.train.SummaryWriter(
+  summary_writer = tf.summary.FileWriter(
       FLAGS.event_log_dir, graph=sess.graph, flush_secs=10)
 
   if FLAGS.pretrained_model:
     saver.restore(sess, FLAGS.pretrained_model)
 
   tf.train.start_queue_runners(sess)
-  sess.run(tf.initialize_all_variables())
+  sess.run(tf.global_variables_initializer())
 
   tf.logging.info('iteration number, cost')
+  #logging.info('iteration number, cost')
 
   # Run training.
   for itr in range(FLAGS.num_iterations):
@@ -227,6 +236,8 @@ def main(unused_argv):
 
     # Print info: iteration #, cost.
     tf.logging.info(str(itr) + ' ' + str(cost))
+    #logging.info(str(itr) + ' ' + str(cost))
+
 
     if (itr) % VAL_INTERVAL == 2:
       # Run through validation set.
@@ -247,7 +258,7 @@ def main(unused_argv):
   tf.logging.info('Saving model.')
   saver.save(sess, FLAGS.output_dir + '/model')
   tf.logging.info('Training complete')
-  tf.logging.flush()
+  #tf.logging.flush() --> NotImplementedError
 
 
 if __name__ == '__main__':

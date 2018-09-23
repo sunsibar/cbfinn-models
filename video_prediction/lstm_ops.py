@@ -44,8 +44,9 @@ def init_state(inputs,
     inferred_batch_size = 0
     batch_size = 0
 
+  state_initializer = state_initializer(dtype=dtype)
   initial_state = state_initializer(
-      tf.pack([batch_size] + state_shape),
+      tf.stack([batch_size] + state_shape),
       dtype=dtype)
   initial_state.set_shape([inferred_batch_size] + state_shape)
 
@@ -90,7 +91,7 @@ def basic_conv_lstm_cell(inputs,
     inputs.get_shape().assert_has_rank(4)
     state.get_shape().assert_has_rank(4)
     c, h = tf.split(state, 2, 3)
-    inputs_h = tf.concat( [inputs, h], 3)
+    inputs_h = tf.concat([inputs, h], 3)
     # Parameters of gates are concatenated into one conv for efficiency.
     i_j_f_o = layers.conv2d(inputs_h,
                             4 * num_channels, [filter_size, filter_size],
