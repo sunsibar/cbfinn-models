@@ -288,7 +288,13 @@ def cdna_transformation(prev_image, cdna_input, num_masks, color_channels):
   for kernel, preimg in zip(cdna_kerns, prev_images):
     kernel = tf.squeeze(kernel)
     if len(kernel.get_shape()) == 3:
-      kernel = tf.expand_dims(kernel, -1)
+      # => either num_masks is 1, or num input channels is 1.
+      if num_masks == 1:
+        kernel = tf.expand_dims(kernel, -1)
+      elif color_channels == 1:
+        kernel = tf.expand_dims(kernel, -2)
+      else:
+          raise RuntimeError("Check where kernels size is coming from, exactly. How could that happen?")
     transformed.append(
         tf.nn.depthwise_conv2d(preimg, kernel, [1, 1, 1, 1], 'SAME'))
   transformed = tf.concat(transformed, 0)
