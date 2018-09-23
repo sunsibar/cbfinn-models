@@ -49,7 +49,7 @@ def build_tfrecord_input(training=True):
     training: training or validation data.
   Flags used:
     FLAGS.data_dir  I believe the tfrecords in there should be one file per sequence.
-    FLAGS.custom_data: If True, expect two subdirs 'train' and 'val' within data directory.
+    FLAGS.custom_data: If True, expect files containing '*train*' and '*val*' within data directory.
                              If False, load first 'train_val_split'-percent of the files if train,
                               else the rest.
     FLAGS.custom_data: to use own bouncing_objects or bouncing_circles datasets.

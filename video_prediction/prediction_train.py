@@ -75,7 +75,7 @@ flags.DEFINE_float('train_val_split', 0.95,
                    ' vs. the validation set. Unused if data is given in '
                    'two separate folders, "train" and "val".')
 
-flags.DEFINE_integer('batch_size', 32, 'batch size for training')
+flags.DEFINE_integer('batch_size', 1, 'batch size for training')
 flags.DEFINE_float('learning_rate', 0.001,
                    'the base learning rate of the generator')
 flags.DEFINE_integer('custom_data', 1, ' If True (1), uses tf-record feature naming '
@@ -126,9 +126,11 @@ class Model(object):
 
     # Split into timesteps.
     actions = tf.split(actions, actions.get_shape()[1], 1)
-    actions = [tf.squeeze(act) for act in actions]
+    actions = [tf.reshape(act, list(act.get_shape()[0:1])+list(act.get_shape()[2:])) for act in actions]
+    #actions = [tf.squeeze(act) for act in actions]
     states = tf.split(states, states.get_shape()[1], 1)
-    states = [tf.squeeze(st) for st in states]
+    states = [tf.reshape(st, list(st.get_shape()[0:1])+list(st.get_shape()[2:])) for st in states]
+    #states = [tf.squeeze(st) for st in states]
     images = tf.split(images, images.get_shape()[1], 1)
     images = [tf.reshape(img, list(img.get_shape()[0:1])+list(img.get_shape()[2:])) for img in images]
     # ^squeeze only the second dimension (split dimension)
