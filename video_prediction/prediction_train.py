@@ -34,7 +34,8 @@ VAL_INTERVAL = 200
 SAVE_INTERVAL = 2000
 
 # tf record data location:
-DATA_DIR = 'push/push_testnovel' # 'push/push_train'   # '../../../../data/bouncing_circles/short_sequences/static_simple_1_bcs'
+#DATA_DIR = 'push/push_testnovel' # 'push/push_train'   # '../../../../data/bouncing_circles/short_sequences/static_simple_1_bcs'
+DATA_DIR = '../../../../data/gen/debug_bouncing_circles/static_simple_2_bcs/tfrecords'
 
 # local output directory
 OUT_DIR = './train_out/firsttry'
@@ -44,31 +45,35 @@ FLAGS = flags.FLAGS
 flags.DEFINE_string('data_dir', DATA_DIR, 'directory containing data.')
 flags.DEFINE_string('output_dir', OUT_DIR, 'directory for model checkpoints.')
 flags.DEFINE_string('event_log_dir', OUT_DIR, 'directory for writing summary.')
-flags.DEFINE_integer('num_iterations', 100000, 'number of training iterations.')
+flags.DEFINE_integer('num_iterations', 2, 'number of training iterations.')
 flags.DEFINE_string('pretrained_model', '',
                     'filepath of a pretrained model to initialize from.')
 
-flags.DEFINE_integer('sequence_length', 10,
+flags.DEFINE_integer('sequence_length', 20,
                      'sequence length, including context frames.')
 flags.DEFINE_integer('context_frames', 2, '# of frames before predictions.')
-flags.DEFINE_integer('use_state', 1,
+flags.DEFINE_integer('use_state', 0,
                      'Whether or not to give the state+action to the model')
 
 flags.DEFINE_string('model', 'CDNA',
                     'model architecture to use - CDNA, DNA, or STP')
 
-flags.DEFINE_integer('num_masks', 10,
+flags.DEFINE_integer('num_masks', 2,
                      'number of masks, usually 1 for DNA, 10 for CDNA, STN.')
 flags.DEFINE_float('schedsamp_k', 900.0,
                    'The k hyperparameter for scheduled sampling,'
                    '-1 for no scheduled sampling.')
 flags.DEFINE_float('train_val_split', 0.95,
                    'The percentage of files to use for the training set,'
-                   ' vs. the validation set.')
+                   ' vs. the validation set. Unused if data is given in '
+                   'two separate folders, "train" and "val".')
 
 flags.DEFINE_integer('batch_size', 32, 'batch size for training')
 flags.DEFINE_float('learning_rate', 0.001,
                    'the base learning rate of the generator')
+flags.DEFINE_integer('custom_data', 1, ' If True (1), uses tf-record feature naming '
+                     'for the bouncing_objects dataset, and loosk for the '
+                     'data in separate /train and /val directories')
 
 
 ## Helper functions
@@ -113,11 +118,11 @@ class Model(object):
     summaries = []
 
     # Split into timesteps.
-    actions = tf.split(1, actions.get_shape()[1], actions)
+    actions = tf.split(actions, actions.get_shape()[1], axis=1)
     actions = [tf.squeeze(act) for act in actions]
-    states = tf.split(1, states.get_shape()[1], states)
+    states = tf.split(states, states.get_shape()[1], axis=1)
     states = [tf.squeeze(st) for st in states]
-    images = tf.split(1, images.get_shape()[1], images)
+    images = tf.split(images, images.get_shape()[1], 1)
     images = [tf.squeeze(img) for img in images]
 
     if reuse_scope is None:
