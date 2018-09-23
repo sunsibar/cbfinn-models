@@ -130,7 +130,9 @@ class Model(object):
     states = tf.split(states, states.get_shape()[1], 1)
     states = [tf.squeeze(st) for st in states]
     images = tf.split(images, images.get_shape()[1], 1)
-    images = [tf.squeeze(img) for img in images]
+    images = [tf.reshape(img, list(img.get_shape()[0:1])+list(img.get_shape()[2:])) for img in images]
+    # ^squeeze only the second dimension (split dimension)
+    #images = [tf.squeeze(img) for img in images]
 
     if reuse_scope is None:
       gen_images, gen_states = construct_model(
