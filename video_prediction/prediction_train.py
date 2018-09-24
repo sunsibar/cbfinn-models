@@ -40,7 +40,8 @@ SAVE_INTERVAL = 2000
 
 # tf record data location:
 #DATA_DIR = 'push/push_testnovel' # 'push/push_train'   # '../../../../data/bouncing_circles/short_sequences/static_simple_1_bcs'
-DATA_DIR = '../../../../data/gen/debug_bouncing_circles/static_simple_2_bcs/tfrecords'
+#DATA_DIR = '../../../../data/gen/debug_bouncing_circles/static_simple_2_bcs/tfrecords'  # <- for VM on windows
+DATA_DIR = '../../../../data/gen/bouncing_circles/short_sequences/static_simple_1_bcs/tfrecords'
 #DATA_DIR = '../../../../data/robots_pushing/push/push_train' # 'push/push_train'   # '../../../../data/bouncing_circles/short_sequences/static_simple_1_bcs'
 
 
@@ -223,7 +224,8 @@ def main(unused_argv):
   if FLAGS.pretrained_model:
     saver.restore(sess, FLAGS.pretrained_model)
 
-  tf.train.start_queue_runners(sess)
+  coord = tf.train.Coordinator()
+  tf.train.start_queue_runners(sess, coord=coord)
   sess.run(tf.global_variables_initializer())
 
   tf.logging.info('iteration number, cost')
@@ -235,8 +237,7 @@ def main(unused_argv):
     feed_dict = {model.prefix: 'train',
                  model.iter_num: np.float32(itr),
                  model.lr: FLAGS.learning_rate}
-    cost, _, summary_str = sess.run([model.loss, model.train_op, model.summ_op],
-                                    feed_dict)
+    cost, _, summary_str = sess.run([model.loss, model.train_op, model.summ_op], feed_dict)
 
     # Print info: iteration #, cost.
     tf.logging.info(str(itr) + ' ' + str(cost))
