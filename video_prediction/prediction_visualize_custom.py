@@ -11,14 +11,14 @@ sys.path.append(os.path.abspath(os.path.join(os.path.dirname(__file__), '../../.
 from src.utils.utils import set_logger, ensure_dir
 import src.utils.tf_utils as tf_utils
 
-weights_path = './trained/nowforreal'
+weights_path = './train_out/nowforreal'
 ckpt_id = None #'model2'
 freerunning = True
 n_visualize = 10
 #DATA_DIR = '/home/noobuntu/Sema2018/data/robots_pushing/push/push_train'    #'push/push_testnovel' # 'push/push_train'   # '../../../../data/bouncing_circles/short_sequences/static_simple_1_bcs'
 #DATA_DIR = '../../../../data/gen/debug_bouncing_circles/static_simple_2_bcs/tfrecords'  # <- for VM on windows
-DATA_DIR = '../../../../data/gen/bouncing_circles/short_sequences/static_simple_1_bcs'
-#DATA_DIR = '../../../../data/bouncing_circles/short_sequences/static_simple_1_bcs'
+#DATA_DIR = '../../../../data/gen/bouncing_circles/short_sequences/static_simple_1_bcs'
+DATA_DIR = '../../../../data/bouncing_circles/short_sequences/static_simple_1_bcs'
 #DATA_DIR = '../../../../data/robots_pushing/push/push_train' # 'push/push_train'
 
 # local output directory
