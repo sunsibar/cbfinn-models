@@ -66,6 +66,9 @@ def build_tfrecord_input(training=True):
   Raises:
     RuntimeError: if no files found.
   """
+
+  num_threads = min(FLAGS.batch_size, 4)
+
   if not FLAGS.custom_data:
     filenames = gfile.Glob(os.path.join(FLAGS.data_dir, '*'))
     if not filenames:
@@ -109,7 +112,6 @@ def build_tfrecord_input(training=True):
           all_data = all_data[..., np.newaxis]
       assert len(all_data.shape) == 5 and all_data.shape[-1] in [1,2,3,4], "Very weird number of channels found in stored dataset: "+str(data.shape[-1]+". Full shape was: "+str(data.shape))
       enqueue_op = data_queue.enqueue_many([all_data])
-      num_threads = min(FLAGS.batch_size, 4)
       qr = tf.train.QueueRunner(data_queue, [enqueue_op] * num_threads)
       tf.train.add_queue_runner(qr)
       serialized_example = data_queue.dequeue()
@@ -168,14 +170,14 @@ def build_tfrecord_input(training=True):
     [image_batch, action_batch, state_batch] = tf.train.batch(
         [image_seq, action_seq, state_seq],
         FLAGS.batch_size,
-        num_threads=FLAGS.batch_size,
+        num_threads=num_threads, #FLAGS.batch_size,
         capacity=100 * FLAGS.batch_size)
     return image_batch, action_batch, state_batch
   else:
     image_batch = tf.train.batch(
         [image_seq],
         FLAGS.batch_size,
-        num_threads=FLAGS.batch_size,
+        num_threads=num_threads,  #FLAGS.batch_size,
         capacity=100 * FLAGS.batch_size)
     zeros_batch = tf.zeros([FLAGS.batch_size, FLAGS.sequence_length, STATE_DIM])
     return image_batch, zeros_batch, zeros_batch

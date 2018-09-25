@@ -276,7 +276,7 @@ def cdna_transformation(prev_image, cdna_input, num_masks, color_channels):
   cdna_kerns = tf.reshape(
       cdna_kerns, [batch_size, DNA_KERN_SIZE, DNA_KERN_SIZE, 1, num_masks])
   cdna_kerns = tf.nn.relu(cdna_kerns - RELU_SHIFT) + RELU_SHIFT
-  norm_factor = tf.reduce_sum(cdna_kerns, [1, 2, 3], keep_dims=True)
+  norm_factor = tf.reduce_sum(cdna_kerns, [1, 2, 3], keepdims=True)
   cdna_kerns /= norm_factor
 
   cdna_kerns = tf.tile(cdna_kerns, [1, 1, 1, color_channels, 1])
