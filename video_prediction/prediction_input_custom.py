@@ -109,7 +109,8 @@ def build_tfrecord_input(training=True):
           all_data = all_data[..., np.newaxis]
       assert len(all_data.shape) == 5 and all_data.shape[-1] in [1,2,3,4], "Very weird number of channels found in stored dataset: "+str(data.shape[-1]+". Full shape was: "+str(data.shape))
       enqueue_op = data_queue.enqueue_many([all_data])
-      qr = tf.train.QueueRunner(data_queue, [enqueue_op] * FLAGS.batch_size)
+      num_threads = min(FLAGS.batch_size, 4)
+      qr = tf.train.QueueRunner(data_queue, [enqueue_op] * num_threads)
       tf.train.add_queue_runner(qr)
       serialized_example = data_queue.dequeue()
 
