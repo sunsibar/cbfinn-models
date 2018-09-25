@@ -215,14 +215,14 @@ def main(unused_argv):
   print('Constructing models and inputs.')
   with tf.variable_scope('model', reuse=None) as training_scope:
       if FLAGS.custom_data:
-          images, actions, states = build_tfrecord_input(split_str='train', file_nums=[1,2,3,4])
+          images, actions, states = build_tfrecord_input(split_string='train', file_nums=[1,2,3,4])
       else:
           images, actions, states = build_tfrecord_input(training=True)
       model = Model(images, actions, states, FLAGS.sequence_length)
 
   with tf.variable_scope('val_model', reuse=None):
       if FLAGS.custom_data:
-          val_images, val_actions, val_states = build_tfrecord_input(split_str='val', file_nums=[1])
+          val_images, val_actions, val_states = build_tfrecord_input(split_string='val', file_nums=[1])
       else:
           val_images, val_actions, val_states = build_tfrecord_input(training=False)
       val_model = Model(val_images, val_actions, val_states,
