@@ -346,7 +346,9 @@ def scheduled_sample(ground_truth_x, generated_x, batch_size, num_ground_truth):
     from generated_x.
   """
   idx = tf.random_shuffle(tf.range(int(batch_size)))
+  # take num_ground_truth random indices from the batch
   ground_truth_idx = tf.gather(idx, tf.range(num_ground_truth))
+  # the remaining indices of the batch - there's (batch_size - num_ground_truth) of them
   generated_idx = tf.gather(idx, tf.range(num_ground_truth, int(batch_size)))
 
   ground_truth_examps = tf.gather(ground_truth_x, ground_truth_idx)
