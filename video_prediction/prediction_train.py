@@ -50,7 +50,7 @@ DATA_DIR = '../../../../data/bouncing_circles/short_sequences/static_simple_1_bc
 # local output directory
 
 timestamp =  datetime.datetime.now().strftime("%y-%b-%d_%Hh%M-%S")
-OUT_DIR = './train_out/nowforreal/'+datetime
+OUT_DIR = './train_out/nowforreal/'+timestamp
 
 FLAGS = flags.FLAGS
 
