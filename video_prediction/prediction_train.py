@@ -41,19 +41,20 @@ SAVE_INTERVAL = 2000
 # tf record data location:
 #DATA_DIR = '/home/noobuntu/Sema2018/data/robots_pushing/push/push_train'    #'push/push_testnovel' # 'push/push_train'   # '../../../../data/bouncing_circles/short_sequences/static_simple_1_bcs'
 #DATA_DIR = '../../../../data/gen/debug_bouncing_circles/static_simple_2_bcs/tfrecords'  # <- for VM on windows
-DATA_DIR = '../../../../data/gen/bouncing_circles/short_sequences/static_simple_1_bcs'
+#DATA_DIR = '../../../../data/gen/bouncing_circles/short_sequences/static_simple_1_bcs'
+DATA_DIR = '../../../../data/bouncing_circles/short_sequences/static_simple_1_bcs'
 #DATA_DIR = '../../../../data/robots_pushing/push/push_train' # 'push/push_train'   # '../../../../data/bouncing_circles/short_sequences/static_simple_1_bcs'
 
 
 # local output directory
-OUT_DIR = './train_out/firsttry'
+OUT_DIR = './train_out/nowforreal'
 
 FLAGS = flags.FLAGS
 
 flags.DEFINE_string('data_dir', DATA_DIR, 'directory containing data.')
 flags.DEFINE_string('output_dir', OUT_DIR, 'directory for model checkpoints.')
 flags.DEFINE_string('event_log_dir', OUT_DIR, 'directory for writing summary.')
-flags.DEFINE_integer('num_iterations', 2, 'number of training iterations.')
+flags.DEFINE_integer('num_iterations', 50000, 'number of training iterations.')
 flags.DEFINE_string('pretrained_model', '',
                     'filepath of a pretrained model to initialize from.')
 
@@ -83,7 +84,7 @@ flags.DEFINE_float('train_val_split', 0.95,
                    ' vs. the validation set. Unused if data is given in '
                    'two separate folders, "train" and "val".')
 
-flags.DEFINE_integer('batch_size', 1, 'batch size for training')
+flags.DEFINE_integer('batch_size', 16, 'batch size for training')
 flags.DEFINE_float('learning_rate', 0.001,
                    'the base learning rate of the generator')
 flags.DEFINE_integer('custom_data', 1, ' If True (1), uses tf-record feature naming '
