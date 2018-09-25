@@ -103,7 +103,7 @@ def build_tfrecord_input(split_string='train', file_nums=[1,2,3,4], training=Non
               all_data = data
           else:
               all_data = np.concatenate((all_data, data), axis=0)
-      data_queue = tf.FIFOQueue(capacity=100*FLAGS.batch_size, dtypes=[tf.int8], shapes=[[FLAGS.sequence_length, ORIGINAL_HEIGHT, ORIGINAL_WIDTH, COLOR_CHAN]])
+      data_queue = tf.FIFOQueue(capacity=100*FLAGS.batch_size, dtypes=[tf.uint8], shapes=[[FLAGS.sequence_length, ORIGINAL_HEIGHT, ORIGINAL_WIDTH, COLOR_CHAN]])
       if len(all_data.shape) == 4:
           all_data = all_data[..., np.newaxis]
       assert len(all_data.shape) == 5 and all_data.shape[-1] in [1,2,3,4], "Very weird number of channels found in stored dataset: "+str(data.shape[-1]+". Full shape was: "+str(data.shape))
@@ -140,7 +140,7 @@ def build_tfrecord_input(split_string='train', file_nums=[1,2,3,4], training=Non
 
     else:
         image = serialized_example[i, ...]
-        image = tf.convert_to_tensor(image, np.int8)
+        image = tf.convert_to_tensor(image, np.uint8)
 
     if IMG_HEIGHT != IMG_WIDTH:
       raise ValueError('Unequal height and width unsupported')

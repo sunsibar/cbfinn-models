@@ -57,8 +57,8 @@ FLAGS = flags.FLAGS
 flags.DEFINE_string('data_dir', DATA_DIR, 'directory containing data.')
 flags.DEFINE_string('output_dir', OUT_DIR, 'directory for model checkpoints.')
 flags.DEFINE_string('event_log_dir', OUT_DIR, 'directory for writing summary.')
-flags.DEFINE_integer('num_iterations', 50000, 'number of training iterations.')   # 50000
-flags.DEFINE_string('pretrained_model', '',
+flags.DEFINE_integer('num_iterations', 2003, 'number of training iterations.')   # 50000
+flags.DEFINE_string('pretrained_model', './trained/nowforreal/model2002',  # /home/noobuntu/Sema2018/reps2018/models/finn_models/video_prediction/trained/nowforreal/model190.index
                     'filepath of a pretrained model to initialize from.')
 
 flags.DEFINE_integer('sequence_length', 20,
@@ -230,8 +230,7 @@ def main(unused_argv):
 
   print('Constructing saver.')
   # Make saver.
-  saver = tf.train.Saver()
-#      tf.get_collection(tf.GraphKeys.VARIABLES), max_to_keep=0)
+  saver = tf.train.Saver( tf.get_collection(tf.GraphKeys.VARIABLES), max_to_keep=0)
 
   set_logger("./logs/")
   # Make training session.

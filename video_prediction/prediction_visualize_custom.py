@@ -1,6 +1,7 @@
 import tensorflow as tf
 import numpy as np
 from tensorflow.python.platform import flags
+from tensorflow.python.tools.inspect_checkpoint import print_tensors_in_checkpoint_file
 import matplotlib.pyplot as plt
 
 from prediction_input_custom import build_tfrecord_input
@@ -11,14 +12,15 @@ sys.path.append(os.path.abspath(os.path.join(os.path.dirname(__file__), '../../.
 from src.utils.utils import set_logger, ensure_dir
 import src.utils.tf_utils as tf_utils
 
-weights_path = './train_out/nowforreal'
+#weights_path = './train_out/nowforreal'
+weights_path = './trained/nowforreal'
 ckpt_id = None #'model2'
 freerunning = True
 n_visualize = 10
 #DATA_DIR = '/home/noobuntu/Sema2018/data/robots_pushing/push/push_train'    #'push/push_testnovel' # 'push/push_train'   # '../../../../data/bouncing_circles/short_sequences/static_simple_1_bcs'
 #DATA_DIR = '../../../../data/gen/debug_bouncing_circles/static_simple_2_bcs/tfrecords'  # <- for VM on windows
-#DATA_DIR = '../../../../data/gen/bouncing_circles/short_sequences/static_simple_1_bcs'
-DATA_DIR = '../../../../data/bouncing_circles/short_sequences/static_simple_1_bcs'
+DATA_DIR = '../../../../data/gen/bouncing_circles/short_sequences/static_simple_1_bcs'
+#DATA_DIR = '../../../../data/bouncing_circles/short_sequences/static_simple_1_bcs'
 #DATA_DIR = '../../../../data/robots_pushing/push/push_train' # 'push/push_train'
 
 # local output directory
@@ -174,7 +176,8 @@ if __name__ == '__main__':
      #   dna=FLAGS.model == 'DNA',
      #   stp=FLAGS.model == 'STP',
      #   context_frames=FLAGS.context_frames)
-    model = Model(images, actions, states, FLAGS.sequence_length)
+    with tf.variable_scope('model', reuse=None):
+        model = Model(images, actions, states, FLAGS.sequence_length)
     gen_images = model.gen_images
     # * *  take n_visualize random samples (automatically) and predict it * * * * * * * * * *
     saver = tf.train.Saver(tf.get_collection(tf.GraphKeys.VARIABLES), max_to_keep=0)
@@ -188,6 +191,9 @@ if __name__ == '__main__':
         ckpt_path = os.path.join(os.path.abspath(weights_path), ckpt_id)
     else:
         ckpt_path = tf.train.latest_checkpoint(weights_path)
+
+    #print_tensors_in_checkpoint_file(ckpt_path, tensor_name='', all_tensors=True)
+
     saver.restore(sess, ckpt_path)
 
     coord = tf.train.Coordinator()
@@ -199,9 +205,12 @@ if __name__ == '__main__':
     num_iter = int(np.ceil(n_visualize / FLAGS.batch_size))
     for itr in range(num_iter):
         # Generate new batch of data.
-        feed_dict = {}
-        inputs, prediction = sess.run([images, gen_images], feed_dict)
-        plt.imshow(prediction[0][-1], cmap='gray')
+        feed_dict = {model.prefix: 'infer',
+                     model.iter_num: np.float32(100)}
+            inputs, prediction, costs = sess.run([images, gen_images, model.recon_costs], feed_dict)
+        # --> inputs: batch_size x seq_len x h x w x c.
+        #     prediction: list with 19 frames (?batch_size, h, w, c).
+        plt.imshow(prediction[-1][0][...,-1], cmap='gray')
 
         targets = inputs[1:]
         #inputs = inputs[:FLAGS.context_frames]
