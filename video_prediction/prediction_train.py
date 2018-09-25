@@ -22,7 +22,7 @@ import logging
 from tensorflow.python.platform import app
 from tensorflow.python.platform import flags
 
-from prediction_input import build_tfrecord_input
+from prediction_input_custom import build_tfrecord_input
 from prediction_model import construct_model
 
 import os, sys
@@ -39,9 +39,9 @@ VAL_INTERVAL = 200
 SAVE_INTERVAL = 2000
 
 # tf record data location:
-DATA_DIR = '/home/noobuntu/Sema2018/data/robots_pushing/push/push_train'    #'push/push_testnovel' # 'push/push_train'   # '../../../../data/bouncing_circles/short_sequences/static_simple_1_bcs'
+#DATA_DIR = '/home/noobuntu/Sema2018/data/robots_pushing/push/push_train'    #'push/push_testnovel' # 'push/push_train'   # '../../../../data/bouncing_circles/short_sequences/static_simple_1_bcs'
 #DATA_DIR = '../../../../data/gen/debug_bouncing_circles/static_simple_2_bcs/tfrecords'  # <- for VM on windows
-#DATA_DIR = '../../../../data/gen/bouncing_circles/short_sequences/static_simple_1_bcs/tfrecords'
+DATA_DIR = '../../../../data/gen/bouncing_circles/short_sequences/static_simple_1_bcs'
 #DATA_DIR = '../../../../data/robots_pushing/push/push_train' # 'push/push_train'   # '../../../../data/bouncing_circles/short_sequences/static_simple_1_bcs'
 
 
@@ -86,7 +86,7 @@ flags.DEFINE_float('train_val_split', 0.95,
 flags.DEFINE_integer('batch_size', 1, 'batch size for training')
 flags.DEFINE_float('learning_rate', 0.001,
                    'the base learning rate of the generator')
-flags.DEFINE_integer('custom_data', 0, ' If True (1), uses tf-record feature naming '
+flags.DEFINE_integer('custom_data', 1, ' If True (1), uses tf-record feature naming '
                      'for the bouncing_objects dataset, and loosk for the '
                      'data in separate /train and /val directories')
 
