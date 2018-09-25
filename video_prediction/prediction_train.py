@@ -18,6 +18,7 @@
 import numpy as np
 import tensorflow as tf
 import logging
+import datetime
 
 from tensorflow.python.platform import app
 from tensorflow.python.platform import flags
@@ -33,10 +34,10 @@ from src.utils.utils import set_logger
 SUMMARY_INTERVAL = 40
 
 # How often to run a batch through the validation model.
-VAL_INTERVAL = 200
+VAL_INTERVAL = 20 # 200
 
 # How often to save a model checkpoint
-SAVE_INTERVAL = 2000
+SAVE_INTERVAL = 47# 2000
 
 # tf record data location, OR if custom data: .npy data location:
 #DATA_DIR = '/home/noobuntu/Sema2018/data/robots_pushing/push/push_train'    #'push/push_testnovel' # 'push/push_train'   # '../../../../data/bouncing_circles/short_sequences/static_simple_1_bcs'
@@ -47,14 +48,16 @@ DATA_DIR = '../../../../data/bouncing_circles/short_sequences/static_simple_1_bc
 
 
 # local output directory
-OUT_DIR = './train_out/nowforreal'
+
+timestamp =  datetime.datetime.now().strftime("%y-%b-%d_%Hh%M-%S")
+OUT_DIR = './train_out/nowforreal/'+datetime
 
 FLAGS = flags.FLAGS
 
 flags.DEFINE_string('data_dir', DATA_DIR, 'directory containing data.')
 flags.DEFINE_string('output_dir', OUT_DIR, 'directory for model checkpoints.')
 flags.DEFINE_string('event_log_dir', OUT_DIR, 'directory for writing summary.')
-flags.DEFINE_integer('num_iterations', 50000, 'number of training iterations.')
+flags.DEFINE_integer('num_iterations', 50000, 'number of training iterations.')   # 50000
 flags.DEFINE_string('pretrained_model', '',
                     'filepath of a pretrained model to initialize from.')
 
@@ -173,6 +176,7 @@ class Model(object):
             stp=FLAGS.model == 'STP',
             context_frames=FLAGS.context_frames)
 
+    self.gen_images = gen_images
     # L2 loss, PSNR for eval.
     loss, psnr_all = 0.0, 0.0
     for i, x, gx in zip(
@@ -226,8 +230,8 @@ def main(unused_argv):
 
   print('Constructing saver.')
   # Make saver.
-  saver = tf.train.Saver(
-      tf.get_collection(tf.GraphKeys.VARIABLES), max_to_keep=0)
+  saver = tf.train.Saver()
+#      tf.get_collection(tf.GraphKeys.VARIABLES), max_to_keep=0)
 
   set_logger("./logs/")
   # Make training session.

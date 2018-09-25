@@ -8,21 +8,21 @@ from prediction_model import construct_model
 
 import os, sys
 sys.path.append(os.path.abspath(os.path.join(os.path.dirname(__file__), '../../../')))
-from src.utils.utils import set_logger
+from src.utils.utils import set_logger, ensure_dir
 import src.utils.tf_utils as tf_utils
 
 weights_path = './trained/nowforreal'
-ckpt_id = None
+ckpt_id = None #'model2'
 freerunning = True
 n_visualize = 10
 #DATA_DIR = '/home/noobuntu/Sema2018/data/robots_pushing/push/push_train'    #'push/push_testnovel' # 'push/push_train'   # '../../../../data/bouncing_circles/short_sequences/static_simple_1_bcs'
 #DATA_DIR = '../../../../data/gen/debug_bouncing_circles/static_simple_2_bcs/tfrecords'  # <- for VM on windows
-#DATA_DIR = '../../../../data/gen/bouncing_circles/short_sequences/static_simple_1_bcs'
-DATA_DIR = '../../../../data/bouncing_circles/short_sequences/static_simple_1_bcs'
+DATA_DIR = '../../../../data/gen/bouncing_circles/short_sequences/static_simple_1_bcs'
+#DATA_DIR = '../../../../data/bouncing_circles/short_sequences/static_simple_1_bcs'
 #DATA_DIR = '../../../../data/robots_pushing/push/push_train' # 'push/push_train'
 
 # local output directory
-OUT_DIR = './vis/'+weights_path.strip(['.', '..', '/', './'])
+OUT_DIR = './vis/'+weights_path.strip('/.')
 
 
 # todo: this would be so much nicer if the parameters were stored as config somewhere. Ah wait I can do that!
@@ -46,9 +46,9 @@ flags.DEFINE_string('model', 'CDNA',
 
 flags.DEFINE_integer('num_masks', 2,
                      'number of masks, usually 1 for DNA, 10 for CDNA, STN.')
-#flags.DEFINE_float('schedsamp_k', 900.0,
-#                   'The k hyperparameter for scheduled sampling,'
-#                   '-1 for no scheduled sampling.')
+flags.DEFINE_float('schedsamp_k', 0.00001,  # sth very close to zero, so that we don't use any gt data after conditioning
+                   'The k hyperparameter for scheduled sampling,'
+                   '-1 for no scheduled sampling.')
 # Scheduled sampling:
 # After initial context frames, for each timestep, the training batch will be composed of num_ground_truth
 #   gt input frames (at that time) and (batch_size - num_ground_truth) frames predicted from the last timestep.
@@ -61,7 +61,7 @@ flags.DEFINE_integer('num_masks', 2,
 #                   ' vs. the validation set. Unused if data is given in '
 #                   'two separate folders, "train" and "val".')
 
-flags.DEFINE_integer('batch_size', 16, 'batch size for evaluation')
+flags.DEFINE_integer('batch_size', 1, 'batch size for evaluation')
 flags.DEFINE_float('learning_rate', 0.001,
                    'the base learning rate of the generator')
 flags.DEFINE_integer('custom_data', 1, ' If True (1), uses tf-record feature naming '
@@ -69,26 +69,117 @@ flags.DEFINE_integer('custom_data', 1, ' If True (1), uses tf-record feature nam
                      'data in separate /train and /val directories')
 
 
+
+# # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # #
+# # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # #
+# # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # #
+def mean_squared_error(true, pred):
+  """L2 distance between tensors true and pred.
+
+  Args:
+    true: the ground truth image.
+    pred: the predicted image.
+  Returns:
+    mean squared error between ground truth and predicted image.
+  """
+  return tf.reduce_sum(tf.square(true - pred)) / tf.to_float(tf.size(pred))
+
+class Model(object):
+
+  def __init__(self,
+               images=None,
+               actions=None,
+               states=None,
+               sequence_length=None,
+               reuse_scope=None):
+
+    if sequence_length is None:
+      sequence_length = FLAGS.sequence_length
+
+    self.prefix = prefix = tf.placeholder(tf.string, [])
+    self.iter_num = tf.placeholder(tf.float32, [])
+    summaries = []
+
+    # Split into timesteps.
+    actions = tf.split(actions, actions.get_shape()[1], 1)
+    actions = [tf.reshape(act, list(act.get_shape()[0:1])+list(act.get_shape()[2:])) for act in actions]
+    #actions = [tf.squeeze(act) for act in actions]
+    states = tf.split(states, states.get_shape()[1], 1)
+    states = [tf.reshape(st, list(st.get_shape()[0:1])+list(st.get_shape()[2:])) for st in states]
+    #states = [tf.squeeze(st) for st in states]
+    images = tf.split(images, images.get_shape()[1], 1)
+    images = [tf.reshape(img, list(img.get_shape()[0:1])+list(img.get_shape()[2:])) for img in images]
+    # ^squeeze only the second dimension (split dimension)
+    #images = [tf.squeeze(img) for img in images]
+
+    if reuse_scope is None:
+      gen_images, gen_states = construct_model(
+          images,
+          actions,
+          states,
+          iter_num=self.iter_num,
+          k=FLAGS.schedsamp_k,
+          use_state=FLAGS.use_state,
+          num_masks=FLAGS.num_masks,
+          cdna=FLAGS.model == 'CDNA',
+          dna=FLAGS.model == 'DNA',
+          stp=FLAGS.model == 'STP',
+          context_frames=FLAGS.context_frames)
+    else:  # If it's a validation or test model.
+      with tf.variable_scope(reuse_scope, reuse=True):
+        gen_images, gen_states = construct_model(
+            images,
+            actions,
+            states,
+            iter_num=self.iter_num,
+            k=FLAGS.schedsamp_k,
+            use_state=FLAGS.use_state,
+            num_masks=FLAGS.num_masks,
+            cdna=FLAGS.model == 'CDNA',
+            dna=FLAGS.model == 'DNA',
+            stp=FLAGS.model == 'STP',
+            context_frames=FLAGS.context_frames)
+
+    self.gen_images = gen_images
+    # L2 loss
+    self.recon_costs = []
+    for i, x, gx in zip(
+        list(range(len(gen_images))), images[FLAGS.context_frames:],
+        gen_images[FLAGS.context_frames - 1:]):
+      self.recon_costs.append(mean_squared_error(x, gx))
+
+
+
+
+
+
+# # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # #
+# # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # #
+# # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # #
+
 if __name__ == '__main__':
 
     # * *  load val-2 split data * * * * * * * * * *
-    images, actions, states = build_tfrecord_input(split_str='val', file_nums=[2])
+    images, actions, states = build_tfrecord_input(split_string='val', file_nums=[2])
     # * *  build the model * * * * * * * * * *
-    gen_images, gen_states = construct_model(
-        images,
-        actions,
-        states,
-        iter_num=-1,
-        k=FLAGS.schedsamp_k,
-        use_state=FLAGS.use_state,
-        num_masks=FLAGS.num_masks,
-        cdna=FLAGS.model == 'CDNA',
-        dna=FLAGS.model == 'DNA',
-        stp=FLAGS.model == 'STP',
-        context_frames=FLAGS.context_frames)
+    #gen_images, gen_states = construct_model(
+    #    images,
+    #    actions,
+    ###    states,
+     #   iter_num=-1,
+     #   k=0.00001,
+     #   use_state=FLAGS.use_state,
+     #   num_masks=FLAGS.num_masks,
+     #   cdna=FLAGS.model == 'CDNA',
+     #   dna=FLAGS.model == 'DNA',
+     #   stp=FLAGS.model == 'STP',
+     #   context_frames=FLAGS.context_frames)
+    model = Model(images, actions, states, FLAGS.sequence_length)
+    gen_images = model.gen_images
     # * *  take n_visualize random samples (automatically) and predict it * * * * * * * * * *
     saver = tf.train.Saver(tf.get_collection(tf.GraphKeys.VARIABLES), max_to_keep=0)
-    set_logger(OUT_DIR)
+    ensure_dir(OUT_DIR)
+    set_logger(OUT_DIR+'vis_log.txt')
     # Make training session.
     sess = tf.InteractiveSession()
 
@@ -109,5 +200,10 @@ if __name__ == '__main__':
     for itr in range(num_iter):
         # Generate new batch of data.
         feed_dict = {}
-        prediction = sess.run([gen_images], feed_dict)
+        inputs, prediction = sess.run([images, gen_images], feed_dict)
         plt.imshow(prediction[0][-1], cmap='gray')
+
+        targets = inputs[1:]
+        #inputs = inputs[:FLAGS.context_frames]
+        targets_freer = inputs[FLAGS.context_frames:]
+        prediction_freer = gen_images[FLAGS.context_frames - 1:]
