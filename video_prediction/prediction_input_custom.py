@@ -42,11 +42,15 @@ IMG_HEIGHT = 80
 STATE_DIM = 5
 
 
-def build_tfrecord_input(training=True):
+def build_tfrecord_input(split_string='train', file_nums=[1,2,3,4], training=None):
   """Create input tfrecord tensors.
 
   Args:
-    training: training or validation data.
+    split_string: Only used if FLAGS.custom_data.
+                    'train', 'val' or 'test' - use only files within path that have this string in their names.
+    file_nums: Only used if FLAGS.custom_data.
+               A list. Only use files ending in 'i.npy', where i is one of the numbers in file_nums.
+    training: Only used if *not* FLAGS.custom_data. Specifies training or validation data.
   Flags used:
     FLAGS.data_dir  I believe the tfrecords in there should be one file per sequence.
     FLAGS.custom_data: If True, expect files containing '*train*' and '*val*' within data directory.
@@ -79,17 +83,9 @@ def build_tfrecord_input(training=True):
     else:
       filenames = filenames[index:]
   else:
-    if FLAGS.custom_data:
-        if training:
-            filenames = gfile.Glob(os.path.join(FLAGS.data_dir, '*train*.npy'))
-        else:
-            filenames = gfile.Glob(os.path.join(FLAGS.data_dir, '*val*.npy'))
+    filenames = gfile.Glob(os.path.join(FLAGS.data_dir, '*'+split_string+'*.npy'))
             # todo: reduce validation files to only one, for comparability with other models
-    else:
-        if training:
-          filenames = gfile.Glob(os.path.join(FLAGS.data_dir, '*train*'))
-        else:
-          filenames = gfile.Glob(os.path.join(FLAGS.data_dir, '*val*'))
+    filenames = [fn for fn in filenames if np.any([fn.endswith(str(i)+'.npy') for i in file_nums]) ]
   if not filenames:
     raise RuntimeError('No data files found.')
 

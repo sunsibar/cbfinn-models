@@ -38,7 +38,7 @@ VAL_INTERVAL = 200
 # How often to save a model checkpoint
 SAVE_INTERVAL = 2000
 
-# tf record data location:
+# tf record data location, OR if custom data: .npy data location:
 #DATA_DIR = '/home/noobuntu/Sema2018/data/robots_pushing/push/push_train'    #'push/push_testnovel' # 'push/push_train'   # '../../../../data/bouncing_circles/short_sequences/static_simple_1_bcs'
 #DATA_DIR = '../../../../data/gen/debug_bouncing_circles/static_simple_2_bcs/tfrecords'  # <- for VM on windows
 #DATA_DIR = '../../../../data/gen/bouncing_circles/short_sequences/static_simple_1_bcs'
@@ -210,13 +210,19 @@ def main(unused_argv):
 
   print('Constructing models and inputs.')
   with tf.variable_scope('model', reuse=None) as training_scope:
-    images, actions, states = build_tfrecord_input(training=True)
-    model = Model(images, actions, states, FLAGS.sequence_length)
+      if FLAGS.custom_data:
+          images, actions, states = build_tfrecord_input(split_str='train', file_nums=[1,2,3,4])
+      else:
+          images, actions, states = build_tfrecord_input(training=True)
+      model = Model(images, actions, states, FLAGS.sequence_length)
 
   with tf.variable_scope('val_model', reuse=None):
-    val_images, val_actions, val_states = build_tfrecord_input(training=False)
-    val_model = Model(val_images, val_actions, val_states,
-                      FLAGS.sequence_length, training_scope)
+      if FLAGS.custom_data:
+          val_images, val_actions, val_states = build_tfrecord_input(split_str='val', file_nums=[1])
+      else:
+          val_images, val_actions, val_states = build_tfrecord_input(training=False)
+      val_model = Model(val_images, val_actions, val_states,
+                            FLAGS.sequence_length, training_scope)
 
   print('Constructing saver.')
   # Make saver.
