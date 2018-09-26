@@ -11,7 +11,7 @@ import os, sys
 sys.path.append(os.path.abspath(os.path.join(os.path.dirname(__file__), '../../../')))
 from src.utils.utils import set_logger, ensure_dir
 import src.utils.tf_utils as tf_utils
-from src.train import visualize_sequence_predicted
+from src.utils.image_utils import visualize_sequence_predicted
 
 #weights_path = './train_out/nowforreal'
 #weights_path = './trained/nowforreal'
@@ -41,7 +41,7 @@ flags.DEFINE_string('event_log_dir', OUT_DIR, 'directory for writing summary.')
 
 flags.DEFINE_integer('sequence_length', 20,
                      'sequence length, including context frames.')
-flags.DEFINE_integer('context_frames', 2, '# of frames before predictions.')
+flags.DEFINE_integer('context_frames', 4, '# of frames before predictions.')
 flags.DEFINE_integer('use_state', 0,
                      'Whether or not to give the state+action to the model')
 
@@ -200,7 +200,6 @@ if __name__ == '__main__':
 
     coord = tf.train.Coordinator()
     tf.train.start_queue_runners(sess, coord=coord)
-    sess.run(tf.global_variables_initializer())
 
     # get n_visualize predicted sequences (and target!)
     #  --  need inputs, targets, predictions. then generate plots.
@@ -228,9 +227,9 @@ if __name__ == '__main__':
         sequence_targets.append(targets)
         sequence_inputs.append(inputs)
 
-    sequence_predictions = np.concatenate(sequence_predictions, axis=0)
-    sequence_inputs = np.concatenate(sequence_inputs, axis=0)
-    sequence_targets = np.concatenate(sequence_targets, axis=0)
+    sequence_predictions = np.concatenate(sequence_predictions, axis=0) * 255
+    sequence_inputs = np.concatenate(sequence_inputs, axis=0) * 255
+    sequence_targets = np.concatenate(sequence_targets, axis=0) * 255
 
-    visualize_sequence_predicted(sequence_inputs, sequence_targets, sequence_predictions, max_n=n_visualize, seq_lengths=FLAGS.sequence_length, store=True, rgb=False,
-                                 output_dir=OUT_DIR+'_'+ckpt_id)
+    visualize_sequence_predicted(sequence_inputs, sequence_targets, sequence_predictions, max_n=n_visualize, seq_lengths=None, store=True, rgb=False,
+                                 output_dir=OUT_DIR+'_'+ckpt_id+'_cond-'+str(FLAGS.context_frames))
