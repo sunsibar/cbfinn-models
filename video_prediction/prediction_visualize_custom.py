@@ -11,10 +11,12 @@ import os, sys
 sys.path.append(os.path.abspath(os.path.join(os.path.dirname(__file__), '../../../')))
 from src.utils.utils import set_logger, ensure_dir
 import src.utils.tf_utils as tf_utils
+from src.train import visualize_sequence_predicted
 
 #weights_path = './train_out/nowforreal'
-weights_path = './trained/nowforreal'
-ckpt_id = None #'model2'
+#weights_path = './trained/nowforreal'
+weights_path = './trained/nowforreal/18-Sep-25_23h16-47'
+ckpt_id = 'model4002' #'model2'
 freerunning = True
 n_visualize = 10
 #DATA_DIR = '/home/noobuntu/Sema2018/data/robots_pushing/push/push_train'    #'push/push_testnovel' # 'push/push_train'   # '../../../../data/bouncing_circles/short_sequences/static_simple_1_bcs'
@@ -202,17 +204,33 @@ if __name__ == '__main__':
 
     # get n_visualize predicted sequences (and target!)
     #  --  need inputs, targets, predictions. then generate plots.
+
+    sequence_predictions = []
+    sequence_inputs = []
+    sequence_targets = []
     num_iter = int(np.ceil(n_visualize / FLAGS.batch_size))
     for itr in range(num_iter):
         # Generate new batch of data.
         feed_dict = {model.prefix: 'infer',
                      model.iter_num: np.float32(100)}
-            inputs, prediction, costs = sess.run([images, gen_images, model.recon_costs], feed_dict)
+        inputs, prediction, costs = sess.run([images, gen_images, model.recon_costs], feed_dict)
         # --> inputs: batch_size x seq_len x h x w x c.
         #     prediction: list with 19 frames (?batch_size, h, w, c).
         plt.imshow(prediction[-1][0][...,-1], cmap='gray')
-
-        targets = inputs[1:]
+        prediction = np.stack(prediction, axis=0).transpose([1,0,2,3,4])
+        # --> batch_size x seq_length x h x w x c
+        targets = inputs[:, 1:]
+        inputs = inputs[:, :-1]
         #inputs = inputs[:FLAGS.context_frames]
         targets_freer = inputs[FLAGS.context_frames:]
         prediction_freer = gen_images[FLAGS.context_frames - 1:]
+        sequence_predictions.append(prediction)
+        sequence_targets.append(targets)
+        sequence_inputs.append(inputs)
+
+    sequence_predictions = np.concatenate(sequence_predictions, axis=0)
+    sequence_inputs = np.concatenate(sequence_inputs, axis=0)
+    sequence_targets = np.concatenate(sequence_targets, axis=0)
+
+    visualize_sequence_predicted(sequence_inputs, sequence_targets, sequence_predictions, max_n=n_visualize, seq_lengths=FLAGS.sequence_length, store=True, rgb=False,
+                                 output_dir=OUT_DIR+'_'+ckpt_id)
