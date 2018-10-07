@@ -16,13 +16,17 @@
 """Code for building the input for the prediction model."""
 
 import os
-
+from collections import OrderedDict
 import numpy as np
 import tensorflow as tf
 
 from tensorflow.python.platform import flags
 from tensorflow.python.platform import gfile
 
+import os, sys
+sys.path.append(os.path.abspath(os.path.join(os.path.dirname(__file__), '../../../')))
+import src.utils.utils as utils
+import src.data_loading as dl
 
 FLAGS = flags.FLAGS
 
@@ -42,7 +46,7 @@ IMG_HEIGHT = 80
 STATE_DIM = 5
 
 
-def build_tfrecord_input(split_string='train', file_nums=[1,2,3,4], training=None):
+def build_tfrecord_input(split_string='train', file_nums=[1,2,3,4], training=None, return_queue=False, shuffle=True):
   """Create input tfrecord tensors.
 
   Args:
@@ -86,6 +90,9 @@ def build_tfrecord_input(split_string='train', file_nums=[1,2,3,4], training=Non
     filenames = gfile.Glob(os.path.join(FLAGS.data_dir, '*'+split_string+'*.npy'))
             # todo: reduce validation files to only one, for comparability with other models
     filenames = [fn for fn in filenames if np.any([fn.endswith(str(i)+'.npy') for i in file_nums]) ]
+    filenames_labels = [fn.replace('.npy', '.npz').replace('_frames_', '_labels_') for fn in filenames]
+    for fn in filenames_labels:
+        assert fn in gfile.Glob(os.path.join(FLAGS.data_dir, '*'+split_string+'*.npz')), "Label file not found: \n "+fn
   if not filenames:
     raise RuntimeError('No data files found.')
 
@@ -97,20 +104,41 @@ def build_tfrecord_input(split_string='train', file_nums=[1,2,3,4], training=Non
 
   else:
       all_data = None
-      for fn in filenames:
+      all_labels = None
+      for fn, fnl in zip(filenames, filenames_labels):
           data = np.load(fn)
+          labels = np.load(fnl)
           if all_data is None:
               all_data = data
+              all_labels = labels
           else:
               all_data = np.concatenate((all_data, data), axis=0)
-      data_queue = tf.FIFOQueue(capacity=100*FLAGS.batch_size, dtypes=[tf.uint8], shapes=[[FLAGS.sequence_length, ORIGINAL_HEIGHT, ORIGINAL_WIDTH, COLOR_CHAN]])
+              all_labels = utils.vstack_array_dicts(all_labels, labels, allow_new_keys=False)
+      all_labels = OrderedDict(all_labels)
+      shape_arr = [[FLAGS.sequence_length, ORIGINAL_HEIGHT, ORIGINAL_WIDTH, COLOR_CHAN]]
+      type_arr = [tf.uint8]
+      for key, val in all_labels.items():
+          assert len(val) == len(all_data)
+          #shape_arr.append((FLAGS.sequence_length,)+ val.shape[1:])
+          shape_arr.append(val.shape[1:])
+          type_arr.append(val.dtype)
+      if shuffle:
+          data_queue = tf.RandomShuffleQueue(capacity=100*FLAGS.batch_size, min_after_dequeue=100, dtypes=type_arr, shapes=shape_arr,
+                                         names=['image_seq']+list(all_labels.keys()))
+      else:
+          data_queue = tf.FIFOQueue(capacity=100*FLAGS.batch_size, dtypes=type_arr, shapes=shape_arr,
+                                         names=['image_seq']+list(all_labels.keys()))
       if len(all_data.shape) == 4:
           all_data = all_data[..., np.newaxis]
       assert len(all_data.shape) == 5 and all_data.shape[-1] in [1,2,3,4], "Very weird number of channels found in stored dataset: "+str(data.shape[-1]+". Full shape was: "+str(data.shape))
-      enqueue_op = data_queue.enqueue_many([all_data])
+
+      n_samples = len(all_data)
+      data_queue.n_samples = n_samples # uh-oh
+      enqueue_op = data_queue.enqueue_many({'image_seq': all_data, **all_labels})
       qr = tf.train.QueueRunner(data_queue, [enqueue_op] * num_threads)
       tf.train.add_queue_runner(qr)
-      serialized_example = data_queue.dequeue()
+      serialized_example_dict = data_queue.dequeue()
+
 
   image_seq, state_seq, action_seq = [], [], []
 
@@ -130,7 +158,7 @@ def build_tfrecord_input(split_string='train', file_nums=[1,2,3,4], training=Non
       else:
         features = {image_name: tf.FixedLenFeature([1], tf.string)}
         #if not FLAGS.custom_data:
-        features = tf.parse_single_example(serialized_example, features=features)
+      features = tf.parse_single_example(serialized_example, features=features)
         #else:
         #    features = tf.train.Example()
         #    features.ParseFromString(serialized_example, features=features)
@@ -139,7 +167,8 @@ def build_tfrecord_input(split_string='train', file_nums=[1,2,3,4], training=Non
       image.set_shape([ORIGINAL_HEIGHT, ORIGINAL_WIDTH, COLOR_CHAN])
 
     else:
-        image = serialized_example[i, ...]
+        image = serialized_example_dict['image_seq'][i, ...]
+        #image = serialized_example[i, ...]
         image = tf.convert_to_tensor(image, np.uint8)
 
     if IMG_HEIGHT != IMG_WIDTH:
@@ -168,15 +197,21 @@ def build_tfrecord_input(split_string='train', file_nums=[1,2,3,4], training=Non
         FLAGS.batch_size,
         num_threads=num_threads, #FLAGS.batch_size,
         capacity=100 * FLAGS.batch_size)
+    if return_queue:
+       return image_batch, action_batch, state_batch, data_queue
     return image_batch, action_batch, state_batch
   else:
-    image_batch = tf.train.batch(
-        [image_seq],
+    serialized_example_dict['image_seq'] = image_seq
+    image_label_batch = tf.train.batch(
+        { #'image_seq': image_seq,
+            **serialized_example_dict},
         FLAGS.batch_size,
         num_threads=num_threads,  #FLAGS.batch_size,
         capacity=100 * FLAGS.batch_size)
     zeros_batch = tf.zeros([FLAGS.batch_size, FLAGS.sequence_length, STATE_DIM])
-    return image_batch, zeros_batch, zeros_batch
+    if return_queue:
+        return image_label_batch, zeros_batch, zeros_batch, data_queue
+    return image_label_batch, zeros_batch, zeros_batch
 
 def get_feature_names_finn(i):
     image_name = 'move/' + str(i) + '/image/encoded'
