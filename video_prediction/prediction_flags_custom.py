@@ -53,3 +53,12 @@ def generate_flags(DATA_DIR, OUT_DIR, lr, batch_size=32, freerunning=False, num_
                          'data in separate /train and /val directories')
 
     return FLAGS
+
+
+
+def del_all_flags(FLAGS):
+    flags_dict = FLAGS._flags()
+    keys_list = [keys for keys in flags_dict]
+    for keys in keys_list:
+        FLAGS.__delattr__(keys)
+
