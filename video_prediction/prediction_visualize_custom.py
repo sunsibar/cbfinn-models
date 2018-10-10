@@ -131,7 +131,7 @@ if __name__ == '__main__':
     sequence_targets = np.concatenate(sequence_targets, axis=0) * 255
     #for i in range(n_masks):
     #    sequence_masks[i] = np.concatenate(sequence_masks[i], axis=0)*255
-    sequence_masks = np.concatenate(sequence_masks, axis=0)
+    sequence_masks = np.concatenate(sequence_masks, axis=0) * 255
 
     visualize_sequence_predicted(sequence_inputs, sequence_targets, sequence_predictions, max_n=n_visualize, seq_lengths=None, store=True, rgb=False,
                                  output_dir=OUT_DIR+'_'+ckpt_id+'_cond-'+str(FLAGS.context_frames), masks=sequence_masks)
