@@ -19,6 +19,7 @@ import numpy as np
 import tensorflow as tf
 import logging
 import datetime
+import time
 
 from tensorflow.python.platform import app
 from tensorflow.python.platform import flags
@@ -177,6 +178,8 @@ class Model(object):
             context_frames=FLAGS.context_frames)
 
     self.gen_images = gen_images
+    self.perc_ground_truth = lambda iter_num: (FLAGS.schedsamp_k / (FLAGS.schedsamp_k + tf.exp(iter_num / FLAGS.schedsamp_k))) \
+                                                if FLAGS.schedsamp_k != -1 else 0
     # L2 loss, PSNR for eval.
     loss, psnr_all = 0.0, 0.0
     for i, x, gx in zip(
@@ -215,7 +218,7 @@ def main(unused_argv):
   print('Constructing models and inputs.')
   with tf.variable_scope('model', reuse=None) as training_scope:
       if FLAGS.custom_data:
-          images, actions, states = build_tfrecord_input(split_string='train', file_nums=[1,2,3,4])
+          images, actions, states = build_tfrecord_input(split_string='train', file_nums=[1,2,3,4], )
       else:
           images, actions, states = build_tfrecord_input(training=True)
       model = Model(images, actions, states, FLAGS.sequence_length)
@@ -244,8 +247,9 @@ def main(unused_argv):
   coord = tf.train.Coordinator()
   tf.train.start_queue_runners(sess, coord=coord)
   sess.run(tf.global_variables_initializer())
+  start_time = time.time()
 
-  tf.logging.info('iteration number, cost')
+  tf.logging.info('time, iteration number, cost, lr, percent gt')
   #logging.info('iteration number, cost')
 
   # Run training.
@@ -254,10 +258,11 @@ def main(unused_argv):
     feed_dict = {model.prefix: 'train',
                  model.iter_num: np.float32(itr),
                  model.lr: FLAGS.learning_rate}
-    cost, _, summary_str = sess.run([model.loss, model.train_op, model.summ_op], feed_dict)
+    cost, _, summary_str, p_gt, lr = sess.run([model.loss, model.train_op, model.summ_op, model.perc_ground_truth], model.lr, feed_dict)
 
     # Print info: iteration #, cost.
-    tf.logging.info(str(itr) + ' ' + str(cost))
+    time_delta = str(datetime.timedelta(seconds=int(time.time() - start_time)))
+    tf.logging.info(time_delta + ' itr: ' +str(itr) + ' cost: ' + str(cost) + ' lr: '+str(lr) + ' %gt: '+str(p_gt))
     #logging.info(str(itr) + ' ' + str(cost))
 
 
