@@ -32,13 +32,13 @@ sys.path.append(os.path.abspath(os.path.join(os.path.dirname(__file__), '../../.
 from src.utils.utils import set_logger
 
 # How often to record tensorboard summaries.
-SUMMARY_INTERVAL = 40
+SUMMARY_INTERVAL = 1000
 
 # How often to run a batch through the validation model.
-VAL_INTERVAL = 20 # 200
+VAL_INTERVAL = 200 # 200
 
 # How often to save a model checkpoint
-SAVE_INTERVAL = 47# 2000
+SAVE_INTERVAL = 2000# 2000
 
 # tf record data location, OR if custom data: .npy data location:
 #DATA_DIR = '/home/noobuntu/Sema2018/data/robots_pushing/push/push_train'    #'push/push_testnovel' # 'push/push_train'   # '../../../../data/bouncing_circles/short_sequences/static_simple_1_bcs'
@@ -58,8 +58,8 @@ FLAGS = flags.FLAGS
 flags.DEFINE_string('data_dir', DATA_DIR, 'directory containing data.')
 flags.DEFINE_string('output_dir', OUT_DIR, 'directory for model checkpoints.')
 flags.DEFINE_string('event_log_dir', OUT_DIR, 'directory for writing summary.')
-flags.DEFINE_integer('num_iterations', 2003, 'number of training iterations.')   # 50000
-flags.DEFINE_string('pretrained_model', './trained/nowforreal/model2002',  # /home/noobuntu/Sema2018/reps2018/models/finn_models/video_prediction/trained/nowforreal/model190.index
+flags.DEFINE_integer('num_iterations', 50003, 'number of training iterations.')   # 50000
+flags.DEFINE_string('pretrained_model', './train_out/nowforreal/18-Sep-27_00h40-36/model26002',  # /home/noobuntu/Sema2018/reps2018/models/finn_models/video_prediction/trained/nowforreal/model190.index
                     'filepath of a pretrained model to initialize from.')
 
 flags.DEFINE_integer('sequence_length', 20,
