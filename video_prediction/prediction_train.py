@@ -59,7 +59,7 @@ flags.DEFINE_string('data_dir', DATA_DIR, 'directory containing data.')
 flags.DEFINE_string('output_dir', OUT_DIR, 'directory for model checkpoints.')
 flags.DEFINE_string('event_log_dir', OUT_DIR, 'directory for writing summary.')
 flags.DEFINE_integer('num_iterations', 50003, 'number of training iterations.')   # 50000
-flags.DEFINE_string('pretrained_model', './train_out/nowforreal/18-Sep-27_00h40-36/model26002',  # /home/noobuntu/Sema2018/reps2018/models/finn_models/video_prediction/trained/nowforreal/model190.index
+flags.DEFINE_string('pretrained_model', '', #'./train_out/nowforreal/18-Sep-27_00h40-36/model26002',  # /home/noobuntu/Sema2018/reps2018/models/finn_models/video_prediction/trained/nowforreal/model190.index
                     'filepath of a pretrained model to initialize from.')
 
 flags.DEFINE_integer('sequence_length', 20,
@@ -258,7 +258,7 @@ def main(unused_argv):
     feed_dict = {model.prefix: 'train',
                  model.iter_num: np.float32(itr),
                  model.lr: FLAGS.learning_rate}
-    cost, _, summary_str, p_gt, lr = sess.run([model.loss, model.train_op, model.summ_op, model.perc_ground_truth], model.lr, feed_dict)
+    cost, _, summary_str, p_gt, lr = sess.run([model.loss, model.train_op, model.summ_op, model.perc_ground_truth, model.lr], feed_dict)
 
     # Print info: iteration #, cost.
     time_delta = str(datetime.timedelta(seconds=int(time.time() - start_time)))
