@@ -125,7 +125,7 @@ def build_tfrecord_input(split_string='train', file_nums=[1,2,3,4], training=Non
       all_labels = None
       for fn, fnl in zip(filenames, filenames_labels):
           data = np.load(fn)
-          labels = np.load(fnl)
+          labels = dict(np.load(fnl))
           if all_data is None:
               all_data = data
               all_labels = labels
