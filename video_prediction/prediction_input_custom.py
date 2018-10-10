@@ -15,6 +15,9 @@
 
 """Code for building the input for the prediction model."""
 
+# TODO: Can remove the parts of this code that enable use of state/action.
+# TODO: Do this if you lose overview of the code (its a mess!)
+
 import os
 from collections import OrderedDict
 import numpy as np
@@ -46,15 +49,28 @@ IMG_HEIGHT = 80
 STATE_DIM = 5
 
 
-def build_tfrecord_input(split_string='train', file_nums=[1,2,3,4], training=None, return_queue=False, shuffle=True):
+def build_tfrecord_input(split_string='train', file_nums=[1,2,3,4], training=None, feed_labels=False,
+                         return_queue=False, shuffle=True, sequential=False):
   """Create input tfrecord tensors.
+
+     Choose between queue output = dict containing images and labels, or
+                    queue output = [images, zeros, zeros].
+     Default parameters are so that it can be used for training with prediction_train.py.
 
   Args:
     split_string: Only used if FLAGS.custom_data.
                     'train', 'val' or 'test' - use only files within path that have this string in their names.
-    file_nums: Only used if FLAGS.custom_data.
-               A list. Only use files ending in 'i.npy', where i is one of the numbers in file_nums.
-    training: Only used if *not* FLAGS.custom_data. Specifies training or validation data.
+    file_nums:    Only used if FLAGS.custom_data.
+                  A list. Only use files ending in 'i.npy', where i is one of the numbers in file_nums.
+    training:     Only used if *not* FLAGS.custom_data. Specifies training or validation data.
+    feed_labels:  Ignored if not FLAGS.custom_data OR if FLAGS.use_state.
+                     Set this to False for compatibility with prediction_train.py. (For training the model.)
+                     If True, the first return value is a dictionary containing images (key: 'image_seq')
+                     as well as labels. Else, first return value is the image output of the queue.
+    return_queue: Ignored if not FLAGS.custom_data.
+                     If True, return the queue itself as a fourth return value
+                     (so that the queue size, etc. can be accessed.)
+    sequential:   Ignored if not FLAGS.custom_data: If True, use only one thread.
   Flags used:
     FLAGS.data_dir  I believe the tfrecords in there should be one file per sequence.
     FLAGS.custom_data: If True, expect files containing '*train*' and '*val*' within data directory.
@@ -76,6 +92,8 @@ def build_tfrecord_input(split_string='train', file_nums=[1,2,3,4], training=Non
   """
 
   num_threads = min(FLAGS.batch_size, 4)
+  if sequential:
+      num_threads = 1
 
   if not FLAGS.custom_data:
     filenames = gfile.Glob(os.path.join(FLAGS.data_dir, '*'))
@@ -123,7 +141,8 @@ def build_tfrecord_input(split_string='train', file_nums=[1,2,3,4], training=Non
           shape_arr.append(val.shape[1:])
           type_arr.append(val.dtype)
       if shuffle:
-          data_queue = tf.RandomShuffleQueue(capacity=100*FLAGS.batch_size, min_after_dequeue=100, dtypes=type_arr, shapes=shape_arr,
+          min_after_dequeue = min(100, int(100*FLAGS.batch_size/2.))
+          data_queue = tf.RandomShuffleQueue(capacity=100*FLAGS.batch_size, min_after_dequeue=min_after_dequeue, dtypes=type_arr, shapes=shape_arr,
                                          names=['image_seq']+list(all_labels.keys()))
       else:
           data_queue = tf.FIFOQueue(capacity=100*FLAGS.batch_size, dtypes=type_arr, shapes=shape_arr,
@@ -202,13 +221,21 @@ def build_tfrecord_input(split_string='train', file_nums=[1,2,3,4], training=Non
     return image_batch, action_batch, state_batch
   else:
     serialized_example_dict['image_seq'] = image_seq
-    image_label_batch = tf.train.batch(
-        { #'image_seq': image_seq,
-            **serialized_example_dict},
-        FLAGS.batch_size,
-        num_threads=num_threads,  #FLAGS.batch_size,
-        capacity=100 * FLAGS.batch_size)
     zeros_batch = tf.zeros([FLAGS.batch_size, FLAGS.sequence_length, STATE_DIM])
+    if feed_labels:  # output of the queue will be a dict
+        image_label_batch = tf.train.batch(
+            { #'image_seq': image_seq,
+                **serialized_example_dict},
+            FLAGS.batch_size,
+            num_threads=num_threads,  #FLAGS.batch_size,
+            capacity=100 * FLAGS.batch_size
+        )
+    else: # queue output is just the images
+        image_label_batch = tf.train.batch(
+            [image_seq],
+            FLAGS.batch_size,
+            num_threads=num_threads,  # FLAGS.batch_size,
+            capacity=100 * FLAGS.batch_size)
     if return_queue:
         return image_label_batch, zeros_batch, zeros_batch, data_queue
     return image_label_batch, zeros_batch, zeros_batch

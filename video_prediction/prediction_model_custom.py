@@ -86,11 +86,13 @@ class CoreModel(object):
 
           if k == -1:
             self.feedself = True
+            self.perc_ground_truth = tf.constant(0.)
           else:
             # Scheduled sampling:
             # Calculate number of ground-truth frames to pass in.
             num_ground_truth = tf.to_int32(
                 tf.round(tf.to_float(self.batch_size) * (k / (k + tf.exp(iter_num / k)))))
+            self.perc_ground_truth = (k / (k + tf.exp(iter_num / k)))
             self.feedself = False
 
           # LSTM state sizes and states.
