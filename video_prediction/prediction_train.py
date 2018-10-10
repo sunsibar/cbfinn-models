@@ -258,7 +258,7 @@ def main(unused_argv):
     feed_dict = {model.prefix: 'train',
                  model.iter_num: np.float32(itr),
                  model.lr: FLAGS.learning_rate}
-    cost, _, summary_str, p_gt, lr = sess.run([model.loss, model.train_op, model.summ_op, model.perc_ground_truth, model.lr], feed_dict)
+    cost, _, summary_str, p_gt, lr = sess.run([model.loss, model.train_op, model.summ_op, model.perc_ground_truth(model.iter_num), model.lr], feed_dict)
 
     # Print info: iteration #, cost.
     time_delta = str(datetime.timedelta(seconds=int(time.time() - start_time)))
