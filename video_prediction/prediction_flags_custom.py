@@ -6,7 +6,7 @@ from tensorflow.python.platform import flags
 
 
 
-def generate_flags(DATA_DIR, OUT_DIR, lr, batch_size=32, freerunning=False, num_masks=2):
+def generate_flags(DATA_DIR, OUT_DIR, lr, batch_size=16, freerunning=False, num_masks=2):
 
 
     FLAGS = flags.FLAGS

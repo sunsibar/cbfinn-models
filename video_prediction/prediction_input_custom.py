@@ -132,7 +132,10 @@ def build_tfrecord_input(split_string='train', file_nums=[1,2,3,4], training=Non
           else:
               all_data = np.concatenate((all_data, data), axis=0)
               all_labels = utils.vstack_array_dicts(all_labels, labels, allow_new_keys=False)
-      all_labels = OrderedDict(all_labels)
+      if feed_labels:
+          all_labels = OrderedDict(all_labels)
+      else:
+          all_labels = {} # reset, we don't need it
       shape_arr = [[FLAGS.sequence_length, ORIGINAL_HEIGHT, ORIGINAL_WIDTH, COLOR_CHAN]]
       type_arr = [tf.uint8]
       for key, val in all_labels.items():
@@ -141,7 +144,7 @@ def build_tfrecord_input(split_string='train', file_nums=[1,2,3,4], training=Non
           shape_arr.append(val.shape[1:])
           type_arr.append(val.dtype)
       if shuffle:
-          min_after_dequeue = min(100, int(100*FLAGS.batch_size/2.))
+          min_after_dequeue = min(100, int(100*FLAGS.batch_size/10.))
           data_queue = tf.RandomShuffleQueue(capacity=100*FLAGS.batch_size, min_after_dequeue=min_after_dequeue, dtypes=type_arr, shapes=shape_arr,
                                          names=['image_seq']+list(all_labels.keys()))
       else:
