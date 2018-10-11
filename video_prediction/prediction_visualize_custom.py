@@ -33,7 +33,7 @@ DATA_DIR = '../../../../data/gen/bouncing_circles/short_sequences/static_simple_
 #DATA_DIR = '../../../../data/robots_pushing/push/push_train' # 'push/push_train'
 
 #local output directory
-OUT_DIR = './vis/'+weights_path.strip('/.')
+OUT_DIR = os.path.join(weights_path, 'vis/') #'./vis/'+weights_path.strip('/.')
 
 
 # todo: this would be so much nicer if the parameters were stored as config somewhere. Ah wait I can do that!
