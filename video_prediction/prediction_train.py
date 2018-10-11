@@ -215,6 +215,8 @@ class Model(object):
 
 def main(unused_argv):
 
+  assert FLAGS.batch_size <= 16, "Servers (at INI) have 8GB; a batch size of 16 is the maximum for this model."
+
   print('Constructing models and inputs.')
   with tf.variable_scope('model', reuse=None) as training_scope:
       if FLAGS.custom_data:
