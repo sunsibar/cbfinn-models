@@ -181,8 +181,10 @@ class Model(object):
             context_frames=FLAGS.context_frames)
 
     self.gen_images = gen_images
-    self.perc_ground_truth = lambda iter_num: (FLAGS.schedsamp_k / (FLAGS.schedsamp_k + tf.exp(iter_num / FLAGS.schedsamp_k))) \
-                                                if FLAGS.schedsamp_k != -1 else 0
+    gt_perc_fun = lambda iter_num: (FLAGS.schedsamp_k / (FLAGS.schedsamp_k + tf.exp(iter_num / FLAGS.schedsamp_k))) \
+        if FLAGS.schedsamp_k != -1 else 0
+    self.perc_ground_truth = gt_perc_fun(self.iter_num)
+    
     # L2 loss, PSNR for eval.
     loss, psnr_all = 0.0, 0.0
     for i, x, gx in zip(
