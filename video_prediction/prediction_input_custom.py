@@ -148,7 +148,7 @@ def build_tfrecord_input(split_string='train', file_nums=[1,2,3,4], training=Non
               type_arr.append(val.dtype)
               qnames.append(key)
       else:
-          all_labels = {} 
+          all_labels = {}
       if shuffle:
           min_after_dequeue = min(100, int(100*FLAGS.batch_size/10.))
           data_queue = tf.RandomShuffleQueue(capacity=100*FLAGS.batch_size, min_after_dequeue=min_after_dequeue, dtypes=type_arr, shapes=shape_arr,

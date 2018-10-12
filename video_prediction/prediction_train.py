@@ -178,8 +178,9 @@ class Model(object):
             context_frames=FLAGS.context_frames)
 
     self.gen_images = gen_images
-    self.perc_ground_truth = lambda iter_num: (FLAGS.schedsamp_k / (FLAGS.schedsamp_k + tf.exp(iter_num / FLAGS.schedsamp_k))) \
+    gt_perc_fun = lambda iter_num: (FLAGS.schedsamp_k / (FLAGS.schedsamp_k + tf.exp(iter_num / FLAGS.schedsamp_k))) \
                                                 if FLAGS.schedsamp_k != -1 else 0
+    self.perc_ground_truth = gt_perc_fun(self.iter_num)
     # L2 loss, PSNR for eval.
     loss, psnr_all = 0.0, 0.0
     for i, x, gx in zip(
@@ -215,7 +216,7 @@ class Model(object):
 
 def main(unused_argv):
 
-  assert FLAGS.batch_size <= 16, "Servers (at INI) have 8GB; a batch size of 16 is the maximum for this model."
+  assert FLAGS.batch_size <= 16, "G (at INI) have 8GB; a batch size of 16 is the maximum for this model."
 
   print('Constructing models and inputs.')
   with tf.variable_scope('model', reuse=None) as training_scope:
@@ -260,7 +261,7 @@ def main(unused_argv):
     feed_dict = {model.prefix: 'train',
                  model.iter_num: np.float32(itr),
                  model.lr: FLAGS.learning_rate}
-    cost, _, summary_str, p_gt, lr = sess.run([model.loss, model.train_op, model.summ_op, model.perc_ground_truth(model.iter_num), model.lr], feed_dict)
+    cost, _, summary_str, p_gt, lr = sess.run([model.loss, model.train_op, model.summ_op, model.perc_ground_truth, model.lr], feed_dict)
 
     # Print info: iteration #, cost.
     time_delta = str(datetime.timedelta(seconds=int(time.time() - start_time)))
