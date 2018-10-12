@@ -125,31 +125,37 @@ def build_tfrecord_input(split_string='train', file_nums=[1,2,3,4], training=Non
       all_labels = None
       for fn, fnl in zip(filenames, filenames_labels):
           data = np.load(fn)
-          labels = dict(np.load(fnl))
+          if feed_labels:
+              labels = dict(np.load(fnl))
           if all_data is None:
               all_data = data
-              all_labels = labels
+              if feed_labels:
+                  all_labels = labels
           else:
               all_data = np.concatenate((all_data, data), axis=0)
-              all_labels = utils.vstack_array_dicts(all_labels, labels, allow_new_keys=False)
-      if feed_labels:
-          all_labels = OrderedDict(all_labels)
-      else:
-          all_labels = {} # reset, we don't need it
+              if feed_labels:
+                  all_labels = utils.vstack_array_dicts(all_labels, labels, allow_new_keys=False)
+
       shape_arr = [[FLAGS.sequence_length, ORIGINAL_HEIGHT, ORIGINAL_WIDTH, COLOR_CHAN]]
       type_arr = [tf.uint8]
-      for key, val in all_labels.items():
-          assert len(val) == len(all_data)
-          #shape_arr.append((FLAGS.sequence_length,)+ val.shape[1:])
-          shape_arr.append(val.shape[1:])
-          type_arr.append(val.dtype)
+      qnames = ['image_seq']
+      if feed_labels:
+          all_labels = OrderedDict(all_labels)
+          for key, val in all_labels.items():
+              assert len(val) == len(all_data)
+              #shape_arr.append((FLAGS.sequence_length,)+ val.shape[1:])
+              shape_arr.append(val.shape[1:])
+              type_arr.append(val.dtype)
+              qnames.append(key)
+      else:
+          all_labels = {} 
       if shuffle:
           min_after_dequeue = min(100, int(100*FLAGS.batch_size/10.))
           data_queue = tf.RandomShuffleQueue(capacity=100*FLAGS.batch_size, min_after_dequeue=min_after_dequeue, dtypes=type_arr, shapes=shape_arr,
-                                         names=['image_seq']+list(all_labels.keys()))
+                                         names=qnames)
       else:
           data_queue = tf.FIFOQueue(capacity=100*FLAGS.batch_size, dtypes=type_arr, shapes=shape_arr,
-                                         names=['image_seq']+list(all_labels.keys()))
+                                         names=qnames)
       if len(all_data.shape) == 4:
           all_data = all_data[..., np.newaxis]
       assert len(all_data.shape) == 5 and all_data.shape[-1] in [1,2,3,4], "Very weird number of channels found in stored dataset: "+str(data.shape[-1]+". Full shape was: "+str(data.shape))
