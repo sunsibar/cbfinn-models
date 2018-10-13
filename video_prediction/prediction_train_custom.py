@@ -305,7 +305,7 @@ def main(unused_argv):
       tf.logging.info('Saving model.')
       saver.save(sess, FLAGS.output_dir + '/model' + str(itr))
     if val_loss < lowest_loss and itr >= 100:
-        best_save_path = os.path.join(train_config['model_dir'], 'best_weights')
+        best_save_path = os.path.join(FLAGS.output_dir, 'best_weights')
         best_save_path = saver_best.save(sess, best_save_path, global_step=itr + 1)
         logging.info("- Found new best accuracy, saving in {}".format(best_save_path))
         lowest_loss = val_loss
