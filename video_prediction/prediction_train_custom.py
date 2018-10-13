@@ -255,7 +255,7 @@ def main(unused_argv):
   print('Constructing saver.')
   # Make saver.
   saver = tf.train.Saver( tf.get_collection(tf.GraphKeys.VARIABLES), max_to_keep=0)
-  saver_best = tf.train.Saver(tf.get_collection(tf.GraphKeys.VARIABLES), max_to_keep=1)
+  saver_best = tf.train.Saver(tf.get_collection(tf.GraphKeys.VARIABLES), max_to_keep=train_config['n_keep_checkpoints'])
 
   utils.set_logger("./logs/")
   # Make training session.
@@ -271,6 +271,7 @@ def main(unused_argv):
   sess.run(tf.global_variables_initializer())
   start_time = time.time()
   lowest_loss = np.inf
+  val_loss = np.inf
   train_time_lowest = np.inf
 
   tf.logging.info('FLAGS.num_interations: ' + str(FLAGS.num_iterations))
