@@ -21,6 +21,8 @@ def mean_squared_error(true, pred):
 
 
 class Model(object):
+  '''This class is not used during training. It's more or less a copy of the class used
+       during training, except without the attributes only needed for training. '''
 
   def __init__(self, FLAGS,
                images=None,
@@ -90,3 +92,19 @@ class Model(object):
         gen_images[FLAGS.context_frames - 1:]):
       self.recon_costs.append(mean_squared_error(x, gx))
 
+
+  def count_parameters(self):
+      """ Counts the number of trainable parameters in this model """
+      self.n_parameters_ = 0
+      for v in tf.trainable_variables():
+          params = 1
+          for s in v.get_shape():
+              params *= s.value
+          self.n_parameters_ += params
+      return self.n_parameters_
+
+  @property
+  def n_parameters(self):
+      if not hasattr(self, 'n_parameters_'):
+          self.count_parameters()
+      return self.n_parameters_

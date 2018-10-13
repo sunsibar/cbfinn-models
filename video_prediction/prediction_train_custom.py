@@ -29,7 +29,8 @@ from prediction_model import construct_model
 
 import os, sys
 sys.path.append(os.path.abspath(os.path.join(os.path.dirname(__file__), '../../../')))
-from src.utils.utils import set_logger
+#from src.utils.utils import set_logger
+import src.utils.utils as utils
 
 from src.frame_predictor_Finn2015_config import train_config, model_config
 
@@ -184,6 +185,7 @@ class Model(object):
     gt_perc_fun = lambda iter_num: (FLAGS.schedsamp_k / (FLAGS.schedsamp_k + tf.exp(iter_num / FLAGS.schedsamp_k))) \
         if FLAGS.schedsamp_k != -1 else 0
     self.perc_ground_truth = gt_perc_fun(self.iter_num)
+    self.count_parameters()
 
     # L2 loss, PSNR for eval.
     loss, psnr_all = 0.0, 0.0
@@ -217,6 +219,18 @@ class Model(object):
     self.train_op = tf.train.AdamOptimizer(self.lr).minimize(loss)
     self.summ_op = tf.summary.merge(summaries)
 
+  def count_parameters(self):
+      """ Counts the number of trainable parameters in this model """
+      self.n_parameters = 0
+      for v in tf.trainable_variables():
+          params = 1
+          for s in v.get_shape():
+              params *= s.value
+          self.n_parameters += params
+      return self.n_parameters
+
+
+# - - - - - - -- - - - - - - - - - - - -
 
 def main(unused_argv):
 
@@ -241,8 +255,9 @@ def main(unused_argv):
   print('Constructing saver.')
   # Make saver.
   saver = tf.train.Saver( tf.get_collection(tf.GraphKeys.VARIABLES), max_to_keep=0)
+  saver_best = tf.train.Saver(tf.get_collection(tf.GraphKeys.VARIABLES), max_to_keep=1)
 
-  set_logger("./logs/")
+  utils.set_logger("./logs/")
   # Make training session.
   sess = tf.InteractiveSession()
   summary_writer = tf.summary.FileWriter(
@@ -255,6 +270,8 @@ def main(unused_argv):
   tf.train.start_queue_runners(sess, coord=coord)
   sess.run(tf.global_variables_initializer())
   start_time = time.time()
+  lowest_loss = np.inf
+  train_time_lowest = np.inf
 
   tf.logging.info('FLAGS.num_interations: ' + str(FLAGS.num_iterations))
   tf.logging.info('time, iteration number, cost, lr, percent gt')
@@ -279,19 +296,32 @@ def main(unused_argv):
       feed_dict = {val_model.lr: 0.0,
                    val_model.prefix: 'val',
                    val_model.iter_num: np.float32(itr)}
-      _, val_summary_str = sess.run([val_model.train_op, val_model.summ_op],
+      _, val_summary_str, val_loss = sess.run([val_model.train_op, val_model.summ_op, val_model.loss],
                                      feed_dict)
       summary_writer.add_summary(val_summary_str, itr)
 
     if (itr) % SAVE_INTERVAL == 2:
       tf.logging.info('Saving model.')
       saver.save(sess, FLAGS.output_dir + '/model' + str(itr))
+    if val_loss < lowest_loss and itr >= 100:
+        best_save_path = os.path.join(train_config['model_dir'], 'best_weights')
+        best_save_path = saver_best.save(sess, best_save_path, global_step=itr + 1)
+        logging.info("- Found new best accuracy, saving in {}".format(best_save_path))
+        lowest_loss = val_loss
+        train_time_lowest = str(datetime.timedelta(seconds=int(time.time() - start_time)))
 
     if (itr) % SUMMARY_INTERVAL:
       summary_writer.add_summary(summary_str, itr)
 
   tf.logging.info('Saving model.')
   saver.save(sess, FLAGS.output_dir + '/model')
+
+  # dump: time taken, #params, best validation error
+  infodict = {'train_time': str(datetime.timedelta(seconds=int(time.time() - start_time))),
+              'train_time_lowest': train_time_lowest, 'lowest_val_loss': str(lowest_loss),
+              'num_trainable_params': str(model.n_parameters)}
+  utils.export_config_json(infodict, os.path.join(train_config['model_dir'], 'train_info.json'))
+
   tf.logging.info('Training complete')
   #tf.logging.flush() --> NotImplementedError
 
