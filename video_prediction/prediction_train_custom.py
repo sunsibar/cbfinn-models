@@ -304,7 +304,8 @@ def main(unused_argv):
     if (itr) % SAVE_INTERVAL == 2:
       tf.logging.info('Saving model.')
       saver.save(sess, FLAGS.output_dir + '/model' + str(itr))
-    if val_loss < lowest_loss and itr >= 100:
+    if val_loss < lowest_loss and itr >= 10000: # 10000: should depend on the value of schedsamp-k, but am too lazy to do
+                                # that right now. Ignore good values in the area where a lot of ground truth data is used.
         best_save_path = os.path.join(FLAGS.output_dir, 'best_weights')
         best_save_path = saver_best.save(sess, best_save_path, global_step=itr + 1)
         logging.info("- Found new best accuracy, saving in {}".format(best_save_path))
