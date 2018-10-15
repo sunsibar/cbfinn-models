@@ -17,7 +17,7 @@ from src.utils.image_utils import visualize_sequence_predicted
 
 
 
-ckpt_id = 'model50002' #'model2'
+ckpt_id = 'model25002' #'model2002' #'model2'
 freerunning = True
 n_visualize = 10
 
@@ -25,7 +25,8 @@ n_visualize = 10
 #weights_path = './train_out/nowforreal'
 #weights_path = './trained/nowforreal'
 #weights_path = './trained/nowforreal/18-Sep-25_23h16-47'
-weights_path = '../../../..//trained_models/Finn2015/zampone/18-Sep-29_22h07-07'
+#weights_path = '../../../..//trained_models/Finn2015/zampone/18-Oct-12_20h52-59'
+weights_path = '../../../..//trained_models/Finn2015/leonhard/18-Oct-13_13h09-20_k-2500_m-2'
 #DATA_DIR = '/home/noobuntu/Sema2018/data/robots_pushing/push/push_train'    #'push/push_testnovel' # 'push/push_train'   # '../../../../data/bouncing_circles/short_sequences/static_simple_1_bcs'
 #DATA_DIR = '../../../../data/gen/debug_bouncing_circles/static_simple_2_bcs/tfrecords'  # <- for VM on windows
 DATA_DIR = '../../../../data/gen/bouncing_circles/short_sequences/static_simple_1_bcs'
@@ -80,10 +81,13 @@ if __name__ == '__main__':
     sess = tf.InteractiveSession()
 
     if ckpt_id is not None:
-        ckpt_id = tf_utils.ckpt_starting_with(ckpt_id, weights_path)
+        ckpt_id_ = tf_utils.ckpt_starting_with(ckpt_id, weights_path)
+        assert ckpt_id_ is not None, "Error: No checkpoint starting with "+str(ckpt_id_)+" found at path "+weights_path
+        ckpt_id = ckpt_id_
         ckpt_path = os.path.join(os.path.abspath(weights_path), ckpt_id)
     else:
         ckpt_path = tf.train.latest_checkpoint(weights_path)
+        assert ckpt_path is not None, "Error: No checkpoint found at path "+weights_path
 
     #print_tensors_in_checkpoint_file(ckpt_path, tensor_name='', all_tensors=True)
 
