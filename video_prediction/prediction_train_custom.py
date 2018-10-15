@@ -63,8 +63,10 @@ flags.DEFINE_string('data_dir', DATA_DIR, 'directory containing data.')
 flags.DEFINE_string('output_dir', OUT_DIR, 'directory for model checkpoints.')
 flags.DEFINE_string('event_log_dir', OUT_DIR, 'directory for writing summary.')
 flags.DEFINE_integer('num_iterations', train_config['n_epochs'] , 'number of training iterations.')   # 50000
-flags.DEFINE_string('pretrained_model', '', #'./train_out/nowforreal/18-Sep-27_00h40-36/model26002',  # /home/noobuntu/Sema2018/reps2018/models/finn_models/video_prediction/trained/nowforreal/model190.index
+flags.DEFINE_string('pretrained_model', train_config['pretrained_model'] ,#'', #'./train_out/nowforreal/18-Sep-27_00h40-36/model26002',  # /home/noobuntu/Sema2018/reps2018/models/finn_models/video_prediction/trained/nowforreal/model190.index
                     'filepath of a pretrained model to initialize from.')
+flags.DEFINE_integer('restart_iter', train_config['restart_iter'],
+                     'for use with pretrained_model; what iteration to restart from')
 
 flags.DEFINE_integer('sequence_length', train_config['max_seq_length'],
                      'sequence length, including context frames.')
@@ -279,7 +281,7 @@ def main(unused_argv):
   #logging.info('iteration number, cost')
 
   # Run training.
-  for itr in range(FLAGS.num_iterations):
+  for itr in range(FLAGS.restart_iter, FLAGS.num_iterations):
     # Generate new batch of data.
     feed_dict = {model.prefix: 'train',
                  model.iter_num: np.float32(itr),
