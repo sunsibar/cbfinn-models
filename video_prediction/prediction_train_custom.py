@@ -68,6 +68,9 @@ flags.DEFINE_string('pretrained_model', train_config['pretrained_model'] ,#'', #
 flags.DEFINE_integer('restart_iter', train_config['restart_iter'],
                      'for use with pretrained_model; what iteration to restart from')
 
+flags.DEFINE_integer('n_keep_checkpoints', train_config['n_keep_checkpoints'],
+                     'number of checkpoints that will be stored during training. Older ones will be overwritten.')
+
 flags.DEFINE_integer('sequence_length', train_config['max_seq_length'],
                      'sequence length, including context frames.')
 flags.DEFINE_integer('context_frames', train_config['context_frames'], '# of frames before predictions.')
@@ -237,6 +240,8 @@ class Model(object):
 def main(unused_argv):
 
   assert FLAGS.batch_size <= 16, "Servers (at INI) have 8GB; a batch size of 16 is the maximum for this model."
+  utils.export_config_json(train_config, os.path.join(OUT_DIR, 'train_config.json'))
+  utils.export_config_json(model_config, os.path.join(OUT_DIR, 'model_config.json'))
 
   print('Constructing models and inputs.')
   with tf.variable_scope('model', reuse=None) as training_scope:
@@ -256,8 +261,8 @@ def main(unused_argv):
 
   print('Constructing saver.')
   # Make saver.
-  saver = tf.train.Saver( tf.get_collection(tf.GraphKeys.VARIABLES), max_to_keep=0)
-  saver_best = tf.train.Saver(tf.get_collection(tf.GraphKeys.VARIABLES), max_to_keep=train_config['n_keep_checkpoints'])
+  saver = tf.train.Saver( tf.get_collection(tf.GraphKeys.VARIABLES), max_to_keep=FLAGS.n_keep_checkpoints)
+  saver_best = tf.train.Saver(tf.get_collection(tf.GraphKeys.VARIABLES), max_to_keep=1)
 
   utils.set_logger("./logs/")
   # Make training session.

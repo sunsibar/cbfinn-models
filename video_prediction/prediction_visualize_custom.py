@@ -11,13 +11,14 @@ from prediction_flags_custom import generate_flags
 
 import os, sys
 sys.path.append(os.path.abspath(os.path.join(os.path.dirname(__file__), '../../../')))
-from src.utils.utils import set_logger, ensure_dir
+import src.utils.utils as utils
 import src.utils.tf_utils as tf_utils
 from src.utils.image_utils import visualize_sequence_predicted
+# load configuration (right now only needed for the correct number of masks)
+from src.frame_predictor_Finn2015_config import train_config, model_config
 
 
-
-ckpt_id = 'model25002' #'model2002' #'model2'
+ckpt_id = 'best_weights' #'model2002' #'model2'
 freerunning = True
 n_visualize = 10
 
@@ -26,7 +27,8 @@ n_visualize = 10
 #weights_path = './trained/nowforreal'
 #weights_path = './trained/nowforreal/18-Sep-25_23h16-47'
 #weights_path = '../../../..//trained_models/Finn2015/zampone/18-Oct-12_20h52-59'
-weights_path = '../../../..//trained_models/Finn2015/leonhard/18-Oct-13_13h09-20_k-2500_m-2'
+#weights_path = '../../../..//trained_models/Finn2015/leonhard/18-Oct-13_13h09-20_k-2500_m-2'
+weights_path = '../../../..//trained_models/Finn2015/leonhard/18-Oct-15_10h42-07'
 #DATA_DIR = '/home/noobuntu/Sema2018/data/robots_pushing/push/push_train'    #'push/push_testnovel' # 'push/push_train'   # '../../../../data/bouncing_circles/short_sequences/static_simple_1_bcs'
 #DATA_DIR = '../../../../data/gen/debug_bouncing_circles/static_simple_2_bcs/tfrecords'  # <- for VM on windows
 DATA_DIR = '../../../../data/gen/bouncing_circles/short_sequences/static_simple_1_bcs'
@@ -52,7 +54,8 @@ OUT_DIR = os.path.join(weights_path, 'vis/') #'./vis/'+weights_path.strip('/.')
 
 if __name__ == '__main__':
 
-    FLAGS = generate_flags(DATA_DIR, OUT_DIR, lr=0.001, batch_size=1, freerunning=freerunning, num_masks=2)
+    # bla = utils.reload_config_json(os.path.join(weights_path,'')) #  no, not as long as the config isn't stored during training.
+    FLAGS = generate_flags(DATA_DIR, OUT_DIR, lr=0.001, batch_size=1, freerunning=freerunning, num_masks=model_config['num_masks'])
 
     # * *  load val-2 split data * * * * * * * * * *
     images, actions, states = build_tfrecord_input(split_string='val', file_nums=[2],
@@ -75,8 +78,8 @@ if __name__ == '__main__':
     gen_images = model.gen_images
     # * *  take n_visualize random samples (automatically) and predict it * * * * * * * * * *
     saver = tf.train.Saver(tf.get_collection(tf.GraphKeys.VARIABLES), max_to_keep=0)
-    ensure_dir(OUT_DIR)
-    set_logger(OUT_DIR+'vis_log.txt')
+    utils.ensure_dir(OUT_DIR)
+    utils.set_logger(OUT_DIR+'vis_log.txt')
     # Make training session.
     sess = tf.InteractiveSession()
 
@@ -137,5 +140,6 @@ if __name__ == '__main__':
     #    sequence_masks[i] = np.concatenate(sequence_masks[i], axis=0)*255
     sequence_masks = np.concatenate(sequence_masks, axis=0) * 255
 
+    output_dir = OUT_DIR+'_'+ckpt_id+'_cond-'+str(FLAGS.context_frames) if freerunning else OUT_DIR+'_'+ckpt_id+'_non-freer'
     visualize_sequence_predicted(sequence_inputs, sequence_targets, sequence_predictions, max_n=n_visualize, seq_lengths=None, store=True, rgb=False,
-                                 output_dir=OUT_DIR+'_'+ckpt_id+'_cond-'+str(FLAGS.context_frames), masks=sequence_masks)
+                                 output_dir=output_dir, masks=sequence_masks)
