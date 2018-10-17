@@ -81,7 +81,7 @@ class Model(object):
     self.prediction = self.gen_images = gen_images
     enc_dict =  {'enc'+str(i): tf.stack(self.core_model.encs[i], axis=1) for i in range(len(self.core_model.encs))}
     hidd_dict = {'hidden'+str(i+1): tf.stack(self.core_model.hidden_layers[i], axis=1) for i in range(len(self.core_model.hidden_layers))}
-    self.layers = {**hidd_dict, **enc_dict, 'input': tf.stack(images, axis=1)}
+    self.layers = {**hidd_dict, **enc_dict, 'inputs': tf.stack(images, axis=1)}
     self.layer_names = self.layers.keys()
     self.bottleneck_layers = self.layers # todo?
     self.bottleneck_layer_names = self.bottleneck_layers.keys()
