@@ -240,6 +240,7 @@ class Model(object):
 def main(unused_argv):
 
   assert FLAGS.batch_size <= 16, "Servers (at INI) have 8GB; a batch size of 16 is the maximum for this model."
+  utils.ensure_dir(OUT_DIR)
   utils.export_config_json(train_config, os.path.join(OUT_DIR, 'train_config.json'))
   utils.export_config_json(model_config, os.path.join(OUT_DIR, 'model_config.json'))
 
@@ -329,7 +330,7 @@ def main(unused_argv):
   infodict = {'train_time': str(datetime.timedelta(seconds=int(time.time() - start_time))),
               'train_time_lowest': train_time_lowest, 'lowest_val_loss': str(lowest_loss),
               'num_trainable_params': str(model.n_parameters)}
-  utils.export_config_json(infodict, os.path.join(train_config['model_dir'], 'train_info.json'))
+  utils.export_config_json(infodict, os.path.join(OUT_DIR, 'train_info.json'))
 
   tf.logging.info('Training complete')
   #tf.logging.flush() --> NotImplementedError
