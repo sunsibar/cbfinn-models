@@ -61,7 +61,7 @@ FLAGS = flags.FLAGS
 
 flags.DEFINE_string('data_dir', DATA_DIR, 'directory containing data.')
 flags.DEFINE_string('output_dir', OUT_DIR, 'directory for model checkpoints.')
-flags.DEFINE_string('event_log_dir', OUT_DIR, 'directory for writing summary.')
+flags.DEFINE_string('event_log_dir', OUT_DIR+'/summary', 'directory for writing summary.')
 flags.DEFINE_integer('num_iterations', train_config['n_epochs'] , 'number of training iterations.')   # 50000
 flags.DEFINE_string('pretrained_model', train_config['pretrained_model'] ,#'', #'./train_out/nowforreal/18-Sep-27_00h40-36/model26002',  # /home/noobuntu/Sema2018/reps2018/models/finn_models/video_prediction/trained/nowforreal/model190.index
                     'filepath of a pretrained model to initialize from.')
@@ -269,7 +269,9 @@ def main(unused_argv):
   # Make training session.
   sess = tf.InteractiveSession()
   summary_writer = tf.summary.FileWriter(
-      FLAGS.event_log_dir, graph=sess.graph, flush_secs=10)
+      FLAGS.event_log_dir + '/train', graph=sess.graph, flush_secs=10)
+  summary_writer_val = tf.summary.FileWriter(
+      FLAGS.event_log_dir + '/val', graph=sess.graph, flush_secs=10)
 
   if FLAGS.pretrained_model:
     saver.restore(sess, FLAGS.pretrained_model)
@@ -307,7 +309,8 @@ def main(unused_argv):
                    val_model.iter_num: np.float32(itr)}
       _, val_summary_str, val_loss = sess.run([val_model.train_op, val_model.summ_op, val_model.loss],
                                      feed_dict)
-      summary_writer.add_summary(val_summary_str, itr)
+      summary_writer_val.add_summary(val_summary_str, itr)
+      summary_writer.add_summary(val_summary_str, itr)  # keep this in case summary_writer_val doesn't work as intended
 
     if (itr) % SAVE_INTERVAL == 2:
       tf.logging.info('Saving model.')
