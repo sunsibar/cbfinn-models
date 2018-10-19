@@ -18,9 +18,10 @@ from src.utils.image_utils import visualize_sequence_predicted
 from src.frame_predictor_Finn2015_config import train_config, model_config
 
 
-ckpt_id = 'best_weights' #'model2002' #'model2'
+ckpt_id = 'model'  # 'model44002' # 'model46002'  #'best_weights' #'model2002' #'model2'
 freerunning = True
 n_visualize = 10
+on_train = False  # If True, visualizes predictions on 'train' data , else on 'val' data
 
 
 #weights_path = './train_out/nowforreal'
@@ -28,10 +29,13 @@ n_visualize = 10
 #weights_path = './trained/nowforreal/18-Sep-25_23h16-47'
 #weights_path = '../../../..//trained_models/Finn2015/zampone/18-Oct-12_20h52-59'
 #weights_path = '../../../..//trained_models/Finn2015/leonhard/18-Oct-13_13h09-20_k-2500_m-2'
-weights_path = '../../../..//trained_models/Finn2015/leonhard/18-Oct-15_10h42-07'
+weights_path = '../../../..//trained_models/Finn2015/leonhard/18-Oct-18_14h35-50_2-balls'
+#weights_path = '../../../..//trained_models/Finn2015/leonhard/18-Oct-18_00h36-53'
 #DATA_DIR = '/home/noobuntu/Sema2018/data/robots_pushing/push/push_train'    #'push/push_testnovel' # 'push/push_train'   # '../../../../data/bouncing_circles/short_sequences/static_simple_1_bcs'
 #DATA_DIR = '../../../../data/gen/debug_bouncing_circles/static_simple_2_bcs/tfrecords'  # <- for VM on windows
-DATA_DIR = '../../../../data/gen/bouncing_circles/short_sequences/static_simple_1_bcs'
+# DATA_DIR = '../../../../data/gen/bouncing_circles/short_sequences/static_simple_1_bcs'
+DATA_DIR = '../../../../data/gen/bouncing_circles/short_sequences/static_simple_2_bcs'
+#DATA_DIR = '../../../../data/gen/bouncing_objects/short_sequences/static_simple_cluttered-white_1_bcs'
 #DATA_DIR = '../../../../data/bouncing_circles/short_sequences/static_simple_1_bcs'
 #DATA_DIR = '../../../../data/robots_pushing/push/push_train' # 'push/push_train'
 
@@ -58,7 +62,8 @@ if __name__ == '__main__':
     FLAGS = generate_flags(DATA_DIR, OUT_DIR, lr=0.001, batch_size=1, freerunning=freerunning, num_masks=model_config['num_masks'])
 
     # * *  load val-2 split data * * * * * * * * * *
-    images, actions, states = build_tfrecord_input(split_string='val', file_nums=[2],
+    split_string = 'train' if on_train else 'val'
+    images, actions, states = build_tfrecord_input(split_string=split_string, file_nums=[2],
                                                         feed_labels=False, return_queue=False)
     # * *  build the model * * * * * * * * * *
     #gen_images, gen_states = construct_model(
@@ -140,6 +145,14 @@ if __name__ == '__main__':
     #    sequence_masks[i] = np.concatenate(sequence_masks[i], axis=0)*255
     sequence_masks = np.concatenate(sequence_masks, axis=0) * 255
 
-    output_dir = OUT_DIR+'_'+ckpt_id+'_cond-'+str(FLAGS.context_frames) if freerunning else OUT_DIR+'_'+ckpt_id+'_non-freer'
+    output_dir = OUT_DIR+'_'+ckpt_id
+    if on_train:
+        output_dir += '_on-train'
+    if freerunning:
+        output_dir += '_cond-'+str(FLAGS.context_frames)
+    else:
+        output_dir += '_non-freer'
+    if 'cluttered' in DATA_DIR:
+        output_dir += '_clut'
     visualize_sequence_predicted(sequence_inputs, sequence_targets, sequence_predictions, max_n=n_visualize, seq_lengths=None, store=True, rgb=False,
                                  output_dir=output_dir, masks=sequence_masks)
