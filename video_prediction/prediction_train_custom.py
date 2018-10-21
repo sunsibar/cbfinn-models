@@ -191,7 +191,7 @@ class Model(object):
 
     self.gen_images = gen_images
     if FLAGS.schedule == 'linear':
-        gt_perc_fun = lambda iter_num: tf.maximum(0., 100. - iter_num / FLAGS.schedsamp_k *100.)  \
+        gt_perc_fun = lambda iter_num: tf.maximum(0., 1. - iter_num / FLAGS.schedsamp_k *1.)  \
             if FLAGS.schedsamp_k != -1 else 0
     elif FLAGS.schedule == 'logistic':
         gt_perc_fun = lambda iter_num: (FLAGS.schedsamp_k / (FLAGS.schedsamp_k + tf.exp(iter_num / FLAGS.schedsamp_k))) \
@@ -295,6 +295,7 @@ def main(unused_argv):
   lowest_loss = np.inf
   val_loss = np.inf
   train_time_lowest = np.inf
+  num_warmup_iters = 30000 if FLAGS.schedule == 'logistic' else FLAGS.schedsamp_k
 
   tf.logging.info('FLAGS.num_interations: ' + str(FLAGS.num_iterations))
   tf.logging.info('time, iteration number, cost, lr, percent gt')

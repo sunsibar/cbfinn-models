@@ -80,7 +80,7 @@ def construct_model(images,
     # Scheduled sampling:
     # Calculate number of ground-truth frames to pass in.
     if schedule == 'linear':
-        gt_perc_fun = lambda it_num: tf.maximum(0., 100. - it_num / k *100.)
+        gt_perc_fun = lambda it_num: tf.maximum(0., 1. - it_num / k *1.)
     elif schedule == 'logistic':
         gt_perc_fun = lambda it_num: (k / (k + tf.exp(it_num / k)))
     else:
