@@ -94,7 +94,7 @@ class CoreModel(object):
               # Scheduled sampling:
               # Calculate number of ground-truth frames to pass in.
               if self.schedule == 'linear':
-                  gt_perc_fun = lambda it_num: tf.maximum(0, 100. - it_num / k * 100.)
+                  gt_perc_fun = lambda it_num: tf.maximum(0., 100. - it_num / k * 100.)
               elif self.schedule == 'logistic':
                   gt_perc_fun = lambda it_num: (k / (k + tf.exp(it_num / k)))
               else:
