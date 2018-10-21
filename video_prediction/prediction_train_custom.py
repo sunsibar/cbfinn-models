@@ -191,7 +191,7 @@ class Model(object):
 
     self.gen_images = gen_images
     if FLAGS.schedule == 'linear':
-        gt_perc_fun = lambda iter_num: tf.maximum(0, 100. - iter_num / FLAGS.schedsamp_k *100.)  \
+        gt_perc_fun = lambda iter_num: tf.maximum(0., 100. - iter_num / FLAGS.schedsamp_k *100.)  \
             if FLAGS.schedsamp_k != -1 else 0
     elif FLAGS.schedule == 'logistic':
         gt_perc_fun = lambda iter_num: (FLAGS.schedsamp_k / (FLAGS.schedsamp_k + tf.exp(iter_num / FLAGS.schedsamp_k))) \
