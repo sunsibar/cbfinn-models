@@ -103,7 +103,8 @@ flags.DEFINE_float('learning_rate', train_config['learning_rate'], # 0.001,
 flags.DEFINE_integer('custom_data', 1, ' If True (1), uses tf-record feature naming '
                      'for the bouncing_objects dataset, and loosk for the '
                      'data in separate /train and /val directories')
-
+flags.DEFINE_string('schedule', train_config['freerun_schedule'], 'either logistic (the standard), or linear. '
+                     'If linear, parameter k is the number of iters that are needed until reaching zero ground truth percent.')
 
 ## Helper functions
 def peak_signal_to_noise_ratio(true, pred):
@@ -170,7 +171,8 @@ class Model(object):
           cdna=FLAGS.model == 'CDNA',
           dna=FLAGS.model == 'DNA',
           stp=FLAGS.model == 'STP',
-          context_frames=FLAGS.context_frames)
+          context_frames=FLAGS.context_frames,
+          schedule=FLAGS.schedule)
     else:  # If it's a validation or test model.
       with tf.variable_scope(reuse_scope, reuse=True):
         gen_images, gen_states = construct_model(
@@ -184,11 +186,18 @@ class Model(object):
             cdna=FLAGS.model == 'CDNA',
             dna=FLAGS.model == 'DNA',
             stp=FLAGS.model == 'STP',
-            context_frames=FLAGS.context_frames)
+            context_frames=FLAGS.context_frames,
+            schedule=FLAGS.schedule)
 
     self.gen_images = gen_images
-    gt_perc_fun = lambda iter_num: (FLAGS.schedsamp_k / (FLAGS.schedsamp_k + tf.exp(iter_num / FLAGS.schedsamp_k))) \
-        if FLAGS.schedsamp_k != -1 else 0
+    if FLAGS.schedule == 'linear':
+        gt_perc_fun = lambda iter_num: tf.maximum(0, 100. - iter_num / FLAGS.schedsamp_k *100.)  \
+            if FLAGS.schedsamp_k != -1 else 0
+    elif FLAGS.schedule == 'logistic':
+        gt_perc_fun = lambda iter_num: (FLAGS.schedsamp_k / (FLAGS.schedsamp_k + tf.exp(iter_num / FLAGS.schedsamp_k))) \
+            if FLAGS.schedsamp_k != -1 else 0
+    else:
+        raise ValueError("Unknown value for flag 'schedule': "+FLAGS.schedule+"; allowed are 'logistic' and 'linear'. ")
     self.perc_ground_truth = gt_perc_fun(self.iter_num)
     self.count_parameters()
 
@@ -219,6 +228,8 @@ class Model(object):
 
     summaries.append(tf.summary.scalar(name=prefix.name + '_loss', tensor=loss))
 
+    summaries.append(tf.summary.scalar(name=prefix.name + '_perc_gt', tensor=self.perc_ground_truth))
+
     self.lr = tf.placeholder_with_default(FLAGS.learning_rate, ())
 
     self.train_op = tf.train.AdamOptimizer(self.lr).minimize(loss)
@@ -236,6 +247,7 @@ class Model(object):
 
 
 # - - - - - - -- - - - - - - - - - - - -
+
 
 def main(unused_argv):
 
@@ -310,7 +322,7 @@ def main(unused_argv):
       _, val_summary_str, val_loss = sess.run([val_model.train_op, val_model.summ_op, val_model.loss],
                                      feed_dict)
       summary_writer_val.add_summary(val_summary_str, itr)
-      summary_writer.add_summary(val_summary_str, itr)  # keep this in case summary_writer_val doesn't work as intended
+      #summary_writer.add_summary(val_summary_str, itr)  # keep this in case summary_writer_val doesn't work as intended
 
     if (itr) % SAVE_INTERVAL == 2:
       tf.logging.info('Saving model.')

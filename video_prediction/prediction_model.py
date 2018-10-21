@@ -39,7 +39,8 @@ def construct_model(images,
                     stp=False,
                     cdna=True,
                     dna=False,
-                    context_frames=2):
+                    context_frames=2,
+                    schedule='logistic'):
   """Build convolutional lstm video predictor using STP, CDNA, or DNA.
 
   Args:
@@ -78,8 +79,18 @@ def construct_model(images,
   else:
     # Scheduled sampling:
     # Calculate number of ground-truth frames to pass in.
+    if schedule == 'linear':
+        gt_perc_fun = lambda it_num: tf.maximum(0, 100. - it_num / k *100.)
+    elif schedule == 'logistic':
+        gt_perc_fun = lambda it_num: (k / (k + tf.exp(it_num / k)))
+    else:
+        raise ValueError("Unknown value for parameter 'schedule': "+schedule+"; allowed are strings 'logistic' and 'linear'. ")
+
+
+    #num_ground_truth = tf.to_int32(
+    #    tf.round(tf.to_float(batch_size) * (k / (k + tf.exp(iter_num / k)))))
     num_ground_truth = tf.to_int32(
-        tf.round(tf.to_float(batch_size) * (k / (k + tf.exp(iter_num / k)))))
+        tf.round(tf.to_float(batch_size) * gt_perc_fun(iter_num) ))
     feedself = False
 
   # LSTM state sizes and states.

@@ -161,7 +161,9 @@ class Model(object):
           cdna=FLAGS.model == 'CDNA',
           dna=FLAGS.model == 'DNA',
           stp=FLAGS.model == 'STP',
-          context_frames=FLAGS.context_frames)
+          context_frames=FLAGS.context_frames,
+          schedule='logistic'
+      )
     else:  # If it's a validation or test model.
       with tf.variable_scope(reuse_scope, reuse=True):
         gen_images, gen_states = construct_model(
@@ -175,7 +177,9 @@ class Model(object):
             cdna=FLAGS.model == 'CDNA',
             dna=FLAGS.model == 'DNA',
             stp=FLAGS.model == 'STP',
-            context_frames=FLAGS.context_frames)
+            context_frames=FLAGS.context_frames,
+            schedule='logistic'
+        )
 
     self.gen_images = gen_images
     gt_perc_fun = lambda iter_num: (FLAGS.schedsamp_k / (FLAGS.schedsamp_k + tf.exp(iter_num / FLAGS.schedsamp_k))) \

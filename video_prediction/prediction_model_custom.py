@@ -42,7 +42,8 @@ class CoreModel(object):
                     stp=False,
                     cdna=True,
                     dna=False,
-                    context_frames=2):
+                    context_frames=2,
+                    schedule='logistic'):
           """Build convolutional lstm video predictor using STP, CDNA, or DNA.
 
               Args:
@@ -59,6 +60,7 @@ class CoreModel(object):
                 dna: True to use Dynamic Neural Advection (DNA)
                 context_frames: number of ground truth frames to pass in before
                                 feeding in own predictions
+                schedule: the type of scheduling; one of 'logistic' (standard) and 'linear'
               Returns: (no, use self.return_gen to get these two)
                 self.gen_images: predicted future image frames
                 self.gen_states: predicted future states
@@ -71,6 +73,7 @@ class CoreModel(object):
             raise ValueError('More than one, or no network option specified.')
           self.batch_size, self.img_height, self.img_width, self.color_channels = images[0].get_shape()[0:4]
           lstm_func = basic_conv_lstm_cell
+          self.schedule = schedule
 
           self.masks = []
           self.transformed = []
@@ -85,15 +88,24 @@ class CoreModel(object):
           current_state = states[0]
 
           if k == -1:
-            self.feedself = True
-            self.perc_ground_truth = tf.constant(0.)
+              self.feedself = True
+              self.perc_ground_truth = tf.constant(0.)
           else:
-            # Scheduled sampling:
-            # Calculate number of ground-truth frames to pass in.
-            num_ground_truth = tf.to_int32(
-                tf.round(tf.to_float(self.batch_size) * (k / (k + tf.exp(iter_num / k)))))
-            self.perc_ground_truth = (k / (k + tf.exp(iter_num / k)))
-            self.feedself = False
+              # Scheduled sampling:
+              # Calculate number of ground-truth frames to pass in.
+              if self.schedule == 'linear':
+                  gt_perc_fun = lambda it_num: tf.maximum(0, 100. - it_num / k * 100.)
+              elif self.schedule == 'logistic':
+                  gt_perc_fun = lambda it_num: (k / (k + tf.exp(it_num / k)))
+              else:
+                  raise ValueError(
+                      "Unknown value for parameter 'schedule': " + self.schedule + "; allowed are strings 'logistic' and 'linear'. ")
+
+              # num_ground_truth = tf.to_int32(
+              #    tf.round(tf.to_float(batch_size) * (k / (k + tf.exp(iter_num / k)))))
+              num_ground_truth = tf.to_int32(tf.round(tf.to_float(self.batch_size) * gt_perc_fun(iter_num)))
+              self.perc_ground_truth = gt_perc_fun(iter_num)
+              self.feedself = False
 
           # LSTM state sizes and states.
           self.lstm_size = lstm_size = np.int32(np.array([32, 32, 64, 64, 128, 64, 32]))
