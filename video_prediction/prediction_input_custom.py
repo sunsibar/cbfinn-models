@@ -77,7 +77,9 @@ def build_tfrecord_input(split_string='train', file_nums=[1,2,3,4], training=Non
                              If False, load first 'train_val_split'-percent of the files if train,
                               else the rest.
     FLAGS.custom_data: to use own bouncing_objects or bouncing_circles datasets.
-    FLAGS.sequence_length: the lenth of sequences in the rf record files
+    FLAGS.sequence_length: OLD: the lenth of sequences in the rf record files
+                           NEW, if custom data: Reduce second dimension of the input to this length (discard remainders).
+                                                At most the length of sequences in the tf record files.
     FLAGS.use_state
     IMG_HEIGHT =!= IMG_WIDTH
     ORIGINAL_HEIGHT, ORIGINAL_WIDTH: can have any height to width ratio
@@ -127,6 +129,13 @@ def build_tfrecord_input(split_string='train', file_nums=[1,2,3,4], training=Non
           data = np.load(fn)
           if feed_labels:
               labels = dict(np.load(fnl))
+          if data.shape[1] > FLAGS.sequence_length:
+              print("prediction_input_custom.py: Need to reduce sequence dimension of data to get target input sequence length.")
+              print("\t data.shape was: "+str(data.shape)+"; reduce 2nd dim to length "+str(FLAGS.sequence_length))
+              data = data[:, :FLAGS.sequence_length, ...] # reduce to sequence length if needed
+              if feed_labels:
+                  for key, val in labels.items():
+                      labels[key] = val[:, :FLAGS.sequence_length, ...]
           if all_data is None:
               all_data = data
               if feed_labels:
