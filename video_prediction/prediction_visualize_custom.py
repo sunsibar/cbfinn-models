@@ -18,7 +18,7 @@ from src.utils.image_utils import visualize_sequence_predicted
 from src.frame_predictor_Finn2015_config import train_config, model_config
 
 
-ckpt_id = 'model'  # 'model44002' # 'model46002'  #'best_weights' #'model2002' #'model2'
+ckpt_id = 'best_weights' #'model100002'  # 'model44002' # 'model46002'  #'best_weights' #'model2002' #'model2'
 freerunning = True
 n_visualize = 10
 on_train = False  # If True, visualizes predictions on 'train' data , else on 'val' data
@@ -29,7 +29,12 @@ on_train = False  # If True, visualizes predictions on 'train' data , else on 'v
 #weights_path = './trained/nowforreal/18-Sep-25_23h16-47'
 #weights_path = '../../../..//trained_models/Finn2015/zampone/18-Oct-12_20h52-59'
 #weights_path = '../../../..//trained_models/Finn2015/leonhard/18-Oct-13_13h09-20_k-2500_m-2'
-weights_path = '../../../..//trained_models/Finn2015/leonhard/18-Oct-18_14h35-50_2-balls'
+#weights_path = '../../../..//trained_models/Finn2015/leonhard/18-Oct-18_14h35-50_2-balls'
+#weights_path = '../../../../trained_models/Finn2015/leonhard/18-Oct-19_11h49-51_2balls'
+#weights_path = '../../../../trained_models/Finn2015/leonhard/18-Oct-22_00h44-04_2balls'
+#weights_path = '../../../../trained_models/Finn2015/leonhard/18-Oct-30_16h05-43_clut'
+weights_path = '../../../../trained_models/Finn2015/leonhard/18-Oct-31_13h27-52'
+#weights_path = '../../../../trained_models/Finn2015/leonhard/18-Oct-20_11h39-26_clut'
 #weights_path = '../../../..//trained_models/Finn2015/leonhard/18-Oct-18_00h36-53'
 #DATA_DIR = '/home/noobuntu/Sema2018/data/robots_pushing/push/push_train'    #'push/push_testnovel' # 'push/push_train'   # '../../../../data/bouncing_circles/short_sequences/static_simple_1_bcs'
 #DATA_DIR = '../../../../data/gen/debug_bouncing_circles/static_simple_2_bcs/tfrecords'  # <- for VM on windows
@@ -59,7 +64,8 @@ OUT_DIR = os.path.join(weights_path, 'vis/') #'./vis/'+weights_path.strip('/.')
 if __name__ == '__main__':
 
     # bla = utils.reload_config_json(os.path.join(weights_path,'')) #  no, not as long as the config isn't stored during training.
-    FLAGS = generate_flags(DATA_DIR, OUT_DIR, lr=0.001, batch_size=1, freerunning=freerunning, num_masks=model_config['num_masks'])
+    FLAGS = generate_flags(DATA_DIR, OUT_DIR, lr=0.001, batch_size=1, freerunning=freerunning, num_masks=model_config['num_masks'],
+                           context_frames=train_config['context_frames'])
 
     # * *  load val-2 split data * * * * * * * * * *
     split_string = 'train' if on_train else 'val'
@@ -116,7 +122,8 @@ if __name__ == '__main__':
     for itr in range(num_iter):
         # Generate new batch of data.
         feed_dict = {model.prefix: 'infer',
-                     model.iter_num: np.float32(100)}
+                     model.iter_num: np.float32(100),
+                     model.core_model.perc_ground_truth: 0.}
         inputs, prediction, costs, masks = sess.run([images, gen_images, model.recon_costs, model.core_model.masks], feed_dict)
         # --> inputs: batch_size x seq_len x h x w x c.
         #     prediction: list with 19 frames (?batch_size, h, w, c).
