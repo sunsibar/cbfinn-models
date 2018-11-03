@@ -6,7 +6,7 @@ from tensorflow.python.platform import flags
 
 
 
-def generate_flags(DATA_DIR, OUT_DIR, lr, batch_size=16, freerunning=False, num_masks=2):
+def generate_flags(DATA_DIR, OUT_DIR, lr, batch_size=16, freerunning=False, num_masks=2, context_frames=2):
 
 
     FLAGS = flags.FLAGS
@@ -20,7 +20,7 @@ def generate_flags(DATA_DIR, OUT_DIR, lr, batch_size=16, freerunning=False, num_
 
     flags.DEFINE_integer('sequence_length', 20,
                          'sequence length, including context frames.')
-    flags.DEFINE_integer('context_frames', 2, '# of frames before predictions.')
+    flags.DEFINE_integer('context_frames', context_frames, '# of frames before predictions.')
     flags.DEFINE_integer('use_state', 0,
                          'Whether or not to give the state+action to the model')
 

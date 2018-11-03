@@ -193,9 +193,11 @@ class Model(object):
     if FLAGS.schedule == 'linear':
         gt_perc_fun = lambda iter_num: tf.maximum(0., 1. - iter_num / FLAGS.schedsamp_k *1.)  \
             if FLAGS.schedsamp_k != -1 else 0
+        self.ep_zero_gt = FLAGS.schedsamp_k
     elif FLAGS.schedule == 'logistic':
         gt_perc_fun = lambda iter_num: (FLAGS.schedsamp_k / (FLAGS.schedsamp_k + tf.exp(iter_num / FLAGS.schedsamp_k))) \
             if FLAGS.schedsamp_k != -1 else 0
+        self.ep_zero_gt = (np.log(100 * FLAGS.schedsamp_k) * FLAGS.schedsamp_k)  # => episode when perc_gt is ca 1%
     else:
         raise ValueError("Unknown value for flag 'schedule': "+FLAGS.schedule+"; allowed are 'logistic' and 'linear'. ")
     self.perc_ground_truth = gt_perc_fun(self.iter_num)
@@ -328,8 +330,8 @@ def main(unused_argv):
     if (itr) % SAVE_INTERVAL == 2:
       tf.logging.info('Saving model.')
       saver.save(sess, FLAGS.output_dir + '/model' + str(itr))
-    if val_loss < lowest_loss and itr >= 25000: # 10000: should depend on the value of schedsamp-k, but am too lazy to do
-                                # that right now. Ignore good values in the area where a lot of ground truth data is used.
+    if val_loss < lowest_loss and itr >= model.ep_zero_gt : # >= 25000: # should depend on the value of schedsamp-k, but am too lazy to do
+                                                    # that right now. Ignore good values in the area where a lot of ground truth data is used.
         best_save_path = os.path.join(FLAGS.output_dir, 'best_weights')
         best_save_path = saver_best.save(sess, best_save_path, global_step=itr + 1)
         logging.info("- Found new best accuracy, saving in {}".format(best_save_path))
