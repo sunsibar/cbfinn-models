@@ -297,7 +297,7 @@ def main(unused_argv):
   lowest_loss = np.inf
   val_loss = np.inf
   train_time_lowest = np.inf
-  num_warmup_iters = 30000 if FLAGS.schedule == 'logistic' else FLAGS.schedsamp_k
+  #num_warmup_iters = 30000 if FLAGS.schedule == 'logistic' else FLAGS.schedsamp_k
 
   tf.logging.info('FLAGS.num_interations: ' + str(FLAGS.num_iterations))
   tf.logging.info('time, iteration number, cost, lr, percent gt')
