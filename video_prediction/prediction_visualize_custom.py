@@ -6,7 +6,8 @@ import matplotlib.pyplot as plt
 
 from prediction_input_custom import build_tfrecord_input
 from prediction_model import construct_model
-from prediction_utils_custom import Model
+from prediction_utils_custom import Model as ModelOriginal
+from prediction_utils_custom import ModelFinnCustom
 from prediction_flags_custom import generate_flags
 
 import os, sys
@@ -15,10 +16,9 @@ import src.utils.utils as utils
 import src.utils.tf_utils as tf_utils
 from src.utils.image_utils import visualize_sequence_predicted
 # load configuration (right now only needed for the correct number of masks)
-from src.frame_predictor_Finn2015_config import train_config, model_config
 
 
-ckpt_id = 'best_weights' #'model100002'  # 'model44002' # 'model46002'  #'best_weights' #'model2002' #'model2'
+ckpt_id = 'model60002'  #'best_weights' #'model100002'  # 'model44002' # 'model46002'  #'best_weights' #'model2002' #'model2'
 freerunning = True
 n_visualize = 10
 on_train = False  # If True, visualizes predictions on 'train' data , else on 'val' data
@@ -33,7 +33,8 @@ on_train = False  # If True, visualizes predictions on 'train' data , else on 'v
 #weights_path = '../../../../trained_models/Finn2015/leonhard/18-Oct-19_11h49-51_2balls'
 #weights_path = '../../../../trained_models/Finn2015/leonhard/18-Oct-22_00h44-04_2balls'
 #weights_path = '../../../../trained_models/Finn2015/leonhard/18-Oct-30_16h05-43_clut'
-weights_path = '../../../../trained_models/Finn2015/leonhard/18-Oct-31_13h27-52'
+#weights_path = '../../../../trained_models/Finn2015/leonhard/18-Oct-31_13h27-52'
+weights_path = '../../../../trained_models/resized_Finn/18-Nov-03_20h31-42'
 #weights_path = '../../../../trained_models/Finn2015/leonhard/18-Oct-20_11h39-26_clut'
 #weights_path = '../../../..//trained_models/Finn2015/leonhard/18-Oct-18_00h36-53'
 #DATA_DIR = '/home/noobuntu/Sema2018/data/robots_pushing/push/push_train'    #'push/push_testnovel' # 'push/push_train'   # '../../../../data/bouncing_circles/short_sequences/static_simple_1_bcs'
@@ -64,6 +65,11 @@ OUT_DIR = os.path.join(weights_path, 'vis/') #'./vis/'+weights_path.strip('/.')
 if __name__ == '__main__':
 
     # bla = utils.reload_config_json(os.path.join(weights_path,'')) #  no, not as long as the config isn't stored during training.
+    try:
+        model_config = utils.reload_config_json(os.path.join(weights_path, 'model_config.json')) #  no, not as long as the config isn't stored during training.
+        train_config = utils.reload_config_json(os.path.join(weights_path, 'train_config.json'))
+    except FileNotFoundError:
+        from src.frame_predictor_Finn2015_config import train_config, model_config
     FLAGS = generate_flags(DATA_DIR, OUT_DIR, lr=0.001, batch_size=1, freerunning=freerunning, num_masks=model_config['num_masks'],
                            context_frames=train_config['context_frames'])
 
@@ -85,7 +91,11 @@ if __name__ == '__main__':
      #   stp=FLAGS.model == 'STP',
      #   context_frames=FLAGS.context_frames)
     with tf.variable_scope('model', reuse=None):
-        model = Model(FLAGS, images, actions, states, FLAGS.sequence_length)
+        if train_config['model'] == 'custom_Finn2015':
+            model = ModelFinnCustom(train_config, model_config, images, actions, states)
+        else:
+            assert train_config['model'] == 'Finn2015'
+            model = ModelOriginal(FLAGS, images, actions, states, FLAGS.sequence_length)
     gen_images = model.gen_images
     # * *  take n_visualize random samples (automatically) and predict it * * * * * * * * * *
     saver = tf.train.Saver(tf.get_collection(tf.GraphKeys.VARIABLES), max_to_keep=0)

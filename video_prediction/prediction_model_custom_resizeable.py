@@ -121,9 +121,13 @@ class FramePredictorFinn(object):
 
         n_layers = (len(self.encoder_layers_sz) + len(self.decoder_layers_sz) + 1)
         n_pool_unpool = np.sum(self.pool_where_enc) + np.sum(self.unpool_where_dec) +4 # +4: the first layer downsamples, always; plus enc3, plus enc4, plus enc7 at the end
-        self.encs = [[]] *  (n_pool_unpool)  # todo
-        self.hidden_layers = [[]] * n_layers
-        self.encs_to_concat = []
+        self.lstm_size = np.int32(np.array(self.encoder_layers_sz + [self.bottleneck_layers_sz] + self.decoder_layers_sz))
+        # variables storing stuff at each timestep
+        self.encs = [[] for _ in range(n_pool_unpool)]
+        self.hidden_layers = [[] for _ in range(n_layers)]
+        self.lstm_states = [[] for _ in range(len(self.lstm_size))]
+        # stores the states from the latest round for each layer:
+        lstm_states = [None for _ in range(len(self.lstm_size))]
         assert np.sum(self.pool_where_enc) == np.sum(self.unpool_where_dec), "down- and upsampling don't correspond"
 
         #self.enc0, self.enc1, self.enc2, self.enc3, self.enc4, self.enc5, self.enc6, self.enc7 = [], [], [], [], [], [], [], []
@@ -155,20 +159,14 @@ class FramePredictorFinn(object):
             self.perc_ground_truth = gt_perc_fun(iter_num)
             self.feedself = False
 
-        # LSTM state sizes and states.
-        #self.lstm_size = lstm_size = np.int32(np.array([32, 32, 64, 64, 128, 64, 32]))
-        self.lstm_size  = np.int32(np.array(self.encoder_layers_sz + [self.bottleneck_layers_sz] + self.decoder_layers_sz))
-        #lstm_state1, lstm_state2, lstm_state3, lstm_state4 = None, None, None, None
-        #lstm_state5, lstm_state6, lstm_state7 = None, None, None
-        self.lstm_states = [None] * len(self.lstm_size)
-        #self.lstm_state1, self.lstm_state2, self.lstm_state3, self.lstm_state4, self.lstm_state5, self.lstm_state6, self.lstm_state7 = \
-        #    [], [], [], [], [], [], []
-        #self.lstm_states = [self.lstm_state1, self.lstm_state2, self.lstm_state3, self.lstm_state4, self.lstm_state5,
-        #                    self.lstm_state6, self.lstm_state7]
-
         for image, action in zip(images[:-1], actions[:-1]):
             # Reuse variables after the first timestep.
             reuse = bool(self.gen_images)
+
+            # variables re-written for each timestep
+            hidden_layers = [[] for _ in range(n_layers)]
+            encs = [[] for _ in range(n_pool_unpool)]
+            encs_to_concat = []
 
             done_warm_start = len(self.gen_images) > context_frames - 1
             with slim.arg_scope(
@@ -195,7 +193,7 @@ class FramePredictorFinn(object):
                 # [32,     32,     32,     32,     64,      64,     64,             =  ,  128,    128,    64,    64,    32,      32,   depends ]
 
                 ## Encoder
-                self.encs[0] = slim.layers.conv2d(
+                encs[0] = slim.layers.conv2d(
                     prev_image,
                     self.encoder_layers_sz[0], #[5, 5],
                     self.filter_size_first,
@@ -205,25 +203,25 @@ class FramePredictorFinn(object):
                     normalizer_params={'scope': 'layer_norm1'})
                 enc_count = 1
                 hidden_count = 0
-                layer_before = self.encs[0]
-                self.encs_to_concat.append(self.encs[0])
+                layer_before = encs[0]
+                encs_to_concat.append(encs[0])
 
                 for i, feat_sz in enumerate(self.encoder_layers_sz):
-                    hidden, self.lstm_states[i] = lstm_func(
-                        layer_before, self.lstm_states[i], self.lstm_size[i], scope='state'+str(i+1)
+                    hidden, lstm_states[i] = lstm_func(
+                        layer_before, lstm_states[i], self.lstm_size[i], scope='state'+str(i+1)
                     )
-                    self.hidden_layers[i] = tf_layers.layer_norm(hidden, scope='layer_norm'+str(i+2))
-                    layer_before = self.hidden_layers[i]
+                    hidden_layers[i] = tf_layers.layer_norm(hidden, scope='layer_norm'+str(i+2))
+                    layer_before = hidden_layers[i]
                     hidden_count += 1
                     if self.pool_where_enc[i]:
-                        self.encs[enc_count] = slim.layers.conv2d(
-                                self.encs[enc_count-1], self.encs[enc_count-1].get_shape()[3], self.enc_filter_size,
+                        encs[enc_count] = slim.layers.conv2d(
+                                encs[enc_count-1], encs[enc_count-1].get_shape()[3], self.enc_filter_size,
                                 stride=self.enc_stride, scope='conv'+str(enc_count))
-                        layer_before = self.encs[enc_count]
-                        self.encs_to_concat.append(self.encs[enc_count])
+                        layer_before = encs[enc_count]
+                        encs_to_concat.append(encs[enc_count])
                         enc_count += 1
                 # drop lowest-size encoder, don't need to concat that anywhere
-                self.encs_to_concat = self.encs_to_concat[:-1]
+                encs_to_concat = encs_to_concat[:-1]
 
                 # ~~~ Concat "actions" etc (just zeros), followed by original enc3
 
@@ -232,23 +230,24 @@ class FramePredictorFinn(object):
                     state_action,
                     [int(self.batch_size), 1, 1, int(state_action.get_shape()[1])])
                 smear = tf.tile(
-                    smear, [1, int(self.encs[enc_count-1].get_shape()[1]), int(self.encs[enc_count-1].get_shape()[2]), 1])
+                    smear, [1, int(encs[enc_count-1].get_shape()[1]), int(encs[enc_count-1].get_shape()[2]), 1])
                 if use_state:
-                    self.encs[enc_count-1] = tf.concat([self.encs[enc_count-1], smear], 3)
-                self.encs[enc_count] = slim.layers.conv2d(
-                    self.encs[enc_count-1], self.hidden_layers[hidden_count-1].get_shape()[3], [1, 1], stride=1, scope='conv'+str(hidden_count+2))
+                    encs[enc_count-1] = tf.concat([encs[enc_count-1], smear], 3)
+                encs[enc_count] = slim.layers.conv2d(
+                    encs[enc_count-1], hidden_layers[hidden_count-1].get_shape()[3], [1, 1], stride=1, scope='conv'+str(hidden_count+2))
                 enc_count += 1
 
                 # ~~~ Bottleneck
                 assert self.lstm_size[hidden_count] == self.bottleneck_layers_sz
                 assert hidden_count == len(self.encoder_layers_sz)
-                bottleneck_hidden, self.lstm_states[hidden_count] = lstm_func(
-                    self.encs[enc_count-1], self.lstm_states[hidden_count], self.lstm_size[hidden_count], scope='state'+str(hidden_count+1))  # last 8x8
-                self.hidden_layers[hidden_count] = tf_layers.layer_norm(bottleneck_hidden, scope='layer_norm'+str(hidden_count+3))
+                bottleneck_hidden, lstm_states[hidden_count] = lstm_func(
+                    encs[enc_count-1], lstm_states[hidden_count], self.lstm_size[hidden_count], scope='state'+str(hidden_count+1))  # last 8x8
+                bottleneck_hidden = tf_layers.layer_norm(bottleneck_hidden, scope='layer_norm'+str(hidden_count+3))
+                hidden_layers[hidden_count] = bottleneck_hidden
                 hidden_count += 1
                 # originally enc4, first transpose convolution
-                self.encs[enc_count] = slim.layers.conv2d_transpose(
-                    self.hidden_layers[hidden_count-1], self.hidden_layers[hidden_count-1].get_shape()[3],
+                encs[enc_count] = slim.layers.conv2d_transpose(
+                    hidden_layers[hidden_count-1], hidden_layers[hidden_count-1].get_shape()[3],
                     self.enc_filter_size, stride=self.enc_stride, scope='convt1')
                 enc_count += 1
                 decoder_count = 1
@@ -257,21 +256,21 @@ class FramePredictorFinn(object):
                 assert hidden_count == len(self.encoder_layers_sz)+1
 
                 for i, feat_sz in enumerate(self.decoder_layers_sz):
-                    hidden, self.lstm_states[hidden_count] = lstm_func(
-                        self.encs[enc_count-1], self.lstm_states[hidden_count], self.lstm_size[hidden_count], scope='state'+str(hidden_count+2))
-                    self.hidden_layers[hidden_count] = tf_layers.layer_norm(hidden, scope='layer_norm'+str(hidden_count+3))
+                    hidden, lstm_states[hidden_count] = lstm_func(
+                        encs[enc_count-1], lstm_states[hidden_count], self.lstm_size[hidden_count], scope='state'+str(hidden_count+2))
+                    hidden_layers[hidden_count] = tf_layers.layer_norm(hidden, scope='layer_norm'+str(hidden_count+3))
                     hidden_count += 1
 
                     # todo: Here's one difference to the original; the original only had layer_norm in the second decoder layer (enc6,
                     # todo:   directly before the final 'warping'/whatever
                     if self.unpool_where_dec[i]:
-                        self.hidden_layers[hidden_count-1] = tf.concat([hidden, self.encs_to_concat[-1-i]], 3)
-                        self.encs[enc_count] = slim.layers.conv2d_transpose(
-                            self.hidden_layers[hidden_count-1], self.hidden_layers[hidden_count-1].get_shape()[3],
+                        hidden_layers[hidden_count-1] = tf.concat([hidden, encs_to_concat[-1-i]], 3)
+                        encs[enc_count] = slim.layers.conv2d_transpose(
+                            hidden_layers[hidden_count-1], hidden_layers[hidden_count-1].get_shape()[3],
                             self.enc_filter_size[0], stride=self.enc_stride, scope='convt'+str(decoder_count+1),
                             normalizer_fn=tf_layers.layer_norm,
                             normalizer_params={'scope': 'layer_norm'+str(enc_count+2)})
-                        last_enc = self.encs[enc_count]
+                        last_enc = encs[enc_count]
                         decoder_count += 1
                         enc_count += 1
 
@@ -287,7 +286,7 @@ class FramePredictorFinn(object):
                     # This allows the network to also generate one image from scratch,
                     # which is useful when regions of the image become unoccluded.
                     transformed = [tf.nn.sigmoid(very_last_enc)]
-                self.encs[enc_count] = very_last_enc #
+                encs[enc_count] = very_last_enc #
                 if stp:
                     stp_input0 = tf.reshape(bottleneck_hidden, [int(self.batch_size), -1])
                     stp_input1 = slim.layers.fully_connected(
@@ -326,12 +325,12 @@ class FramePredictorFinn(object):
                 #lstm_states = [lstm_state1, lstm_state2, lstm_state3, lstm_state4, lstm_state5, lstm_state6, lstm_state7]
                 #encs = [enc0, enc1, enc2, enc3, enc4, enc5, enc6, enc7]
                 #hidden_layers = [hidden1, hidden2, hidden3, hidden4, hidden5, hidden6, hidden7]
-                #for i, enc in enumerate(encs):
-                #    self.encs[i].append(enc)
-                #for i, hidd in enumerate(hidden_layers):
-                #    self.hidden_layers[i].append(hidd)
-                #for i, lstm_st in enumerate(lstm_states):
-                #    self.lstm_states[i].append(lstm_st)
+                for i, enc in enumerate(encs):
+                    self.encs[i].append(enc)
+                for i, hidd in enumerate(hidden_layers):
+                    self.hidden_layers[i].append(hidd)
+                for i, lstm_st in enumerate(lstm_states):
+                    self.lstm_states[i].append(lstm_st)
 
     def return_generated(self):
         return self.gen_images, self.gen_states

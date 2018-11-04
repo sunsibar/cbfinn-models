@@ -108,6 +108,8 @@ class CoreModel(object):
               self.feedself = False
 
           # LSTM state sizes and states.
+          # Todo: remember: lstm_stateX (without self.) store the state from the latest timestep. That's important. Be aware
+          # Todo:            of this when copy-pasting and modifying this code. (And self.lstm_stateX store states from all timesteps.)
           self.lstm_size = lstm_size = np.int32(np.array([32, 32, 64, 64, 128, 64, 32]))
           lstm_state1, lstm_state2, lstm_state3, lstm_state4 = None, None, None, None
           lstm_state5, lstm_state6, lstm_state7 = None, None, None

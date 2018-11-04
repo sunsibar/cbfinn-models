@@ -55,7 +55,9 @@ DATA_DIR = train_config['data_dir']
 # local output directory
 
 timestamp =  datetime.datetime.now().strftime("%y-%b-%d_%Hh%M-%S")
-OUT_DIR = os.path.join(train_config['output_dir'] , timestamp) #'./train_out/nowforreal/'+timestamp
+train_config['model_dir'] = os.path.abspath(os.path.join(train_config['output_dir'], train_config['name'] , timestamp))
+OUT_DIR = train_config['model_dir'] #os.path.join(train_config['output_dir'] , timestamp) #'./train_out/nowforreal/'+timestamp
+os.makedirs(OUT_DIR)
 
 FLAGS = flags.FLAGS
 
