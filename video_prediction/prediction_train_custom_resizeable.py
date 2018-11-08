@@ -189,11 +189,12 @@ class Model(object):
     if FLAGS.schedule == 'linear':
         gt_perc_fun = lambda iter_num: tf.maximum(0., 1. - iter_num / FLAGS.schedsamp_k *1.)  \
             if FLAGS.schedsamp_k != -1 else 0
-        self.ep_zero_gt = FLAGS.schedsamp_k
+        self.ep_zero_gt = FLAGS.schedsamp_k / 2.
     elif FLAGS.schedule == 'logistic':
         gt_perc_fun = lambda iter_num: (FLAGS.schedsamp_k / (FLAGS.schedsamp_k + tf.exp(iter_num / FLAGS.schedsamp_k))) \
             if FLAGS.schedsamp_k != -1 else 0
-        self.ep_zero_gt = (np.log(100 * FLAGS.schedsamp_k) * FLAGS.schedsamp_k)  # => episode when perc_gt is ca 1%
+        #self.ep_zero_gt = (np.log(100 * FLAGS.schedsamp_k) * FLAGS.schedsamp_k)  # => episode when perc_gt is ca 1%
+        self.ep_zero_gt = np.log(FLAGS.schedsamp_k) * FLAGS.schedsamp_k  # => episode when perc_gt is ca 1%
     else:
         raise ValueError("Unknown value for flag 'schedule': "+FLAGS.schedule+"; allowed are 'logistic' and 'linear'. ")
     self.perc_ground_truth = gt_perc_fun(self.iter_num)
