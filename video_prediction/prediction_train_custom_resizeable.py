@@ -79,7 +79,7 @@ flags.DEFINE_integer('context_frames', train_config['context_frames'], '# of fra
 flags.DEFINE_integer('use_state', 0,
                      'Whether or not to give the state+action to the model')
 
-flags.DEFINE_string('model', model_config['model_subtype'],
+flags.DEFINE_string('model', model_config['Finn_subtype'],
                     'model architecture to use - CDNA, DNA, or STP')
 
 flags.DEFINE_integer('num_masks', model_config['num_masks'],
