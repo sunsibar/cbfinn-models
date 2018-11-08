@@ -82,9 +82,13 @@ class FramePredictorFinn(object):
         k = k
         use_state = False
         num_masks = model_config['num_masks']
-        stp = model_config['Finn_subtype'].lower() == 'stp'
-        cdna = model_config['Finn_subtype'].lower() == 'cdna'
-        dna = model_config['Finn_subtype'].lower() == 'dna'
+        subtype_key = 'Finn_subtype' if 'Finn_subtype' in model_config.keys() else 'model_subtype'
+        #stp = model_config['Finn_subtype'].lower() == 'stp'
+        #cdna = model_config['Finn_subtype'].lower() == 'cdna'
+        #dna = model_config['Finn_subtype'].lower() == 'dna'
+        stp = model_config[subtype_key].lower() == 'stp'
+        cdna = model_config[subtype_key].lower() == 'cdna'
+        dna = model_config[subtype_key].lower() == 'dna'
         #context_frames = model_config['context_frames']
         #self.schedule = model_config['freerun_schedule']
         self.schedule = schedule
