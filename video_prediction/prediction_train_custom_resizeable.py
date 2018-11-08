@@ -278,73 +278,79 @@ def main(unused_argv):
 
   utils.set_logger("./logs/")
   # Make training session.
-  sess = tf.InteractiveSession()
-  summary_writer = tf.summary.FileWriter(
-      FLAGS.event_log_dir + '/train', graph=sess.graph, flush_secs=10)
-  summary_writer_val = tf.summary.FileWriter(
-      FLAGS.event_log_dir + '/val', graph=sess.graph, flush_secs=10)
 
-  if FLAGS.pretrained_model:
-    saver.restore(sess, FLAGS.pretrained_model)
+  tf_config = tf.ConfigProto(log_device_placement=False)  # logging device pl. is too verbose
+  tf_config.gpu_options.allow_growth = True
+  tf_config.gpu_options.per_process_gpu_memory_fraction = 0.6
+  with tf.Session(config=tf_config) as sess:
 
-  coord = tf.train.Coordinator()
-  tf.train.start_queue_runners(sess, coord=coord)
-  sess.run(tf.global_variables_initializer())
-  start_time = time.time()
-  lowest_loss = np.inf
-  val_loss = np.inf
-  train_time_lowest = np.inf
-  num_warmup_iters = 30000 if FLAGS.schedule == 'logistic' else FLAGS.schedsamp_k
+  #sess = tf.InteractiveSession()
+      summary_writer = tf.summary.FileWriter(
+          FLAGS.event_log_dir + '/train', graph=sess.graph, flush_secs=10)
+      summary_writer_val = tf.summary.FileWriter(
+          FLAGS.event_log_dir + '/val', graph=sess.graph, flush_secs=10)
 
-  tf.logging.info('FLAGS.num_interations: ' + str(FLAGS.num_iterations))
-  tf.logging.info('time, iteration number, cost, lr, percent gt')
-  #logging.info('iteration number, cost')
+      if FLAGS.pretrained_model:
+        saver.restore(sess, FLAGS.pretrained_model)
 
-  # Run training.
-  for itr in range(FLAGS.restart_iter, FLAGS.num_iterations):
-    # Generate new batch of data.
-    feed_dict = {model.prefix: 'train',
-                 model.iter_num: np.float32(itr),
-                 model.lr: FLAGS.learning_rate}
-    cost, _, summary_str, p_gt, lr = sess.run([model.loss, model.train_op, model.summ_op, model.perc_ground_truth, model.lr], feed_dict)
+      coord = tf.train.Coordinator()
+      tf.train.start_queue_runners(sess, coord=coord)
+      sess.run(tf.global_variables_initializer())
+      start_time = time.time()
+      lowest_loss = np.inf
+      val_loss = np.inf
+      train_time_lowest = np.inf
+      num_warmup_iters = 30000 if FLAGS.schedule == 'logistic' else FLAGS.schedsamp_k
 
-    # Print info: iteration #, cost.
-    time_delta = str(datetime.timedelta(seconds=int(time.time() - start_time)))
-    tf.logging.info(time_delta + ' itr: ' +str(itr) + ' cost: ' + str(cost) + ' lr: '+str(lr) + ' %gt: '+str(p_gt))
-    #logging.info(str(itr) + ' ' + str(cost))
+      tf.logging.info('FLAGS.num_interations: ' + str(FLAGS.num_iterations))
+      tf.logging.info('time, iteration number, cost, lr, percent gt')
+      #logging.info('iteration number, cost')
+
+      # Run training.
+      for itr in range(FLAGS.restart_iter, FLAGS.num_iterations):
+        # Generate new batch of data.
+        feed_dict = {model.prefix: 'train',
+                     model.iter_num: np.float32(itr),
+                     model.lr: FLAGS.learning_rate}
+        cost, _, summary_str, p_gt, lr = sess.run([model.loss, model.train_op, model.summ_op, model.perc_ground_truth, model.lr], feed_dict)
+
+        # Print info: iteration #, cost.
+        time_delta = str(datetime.timedelta(seconds=int(time.time() - start_time)))
+        tf.logging.info(time_delta + ' itr: ' +str(itr) + ' cost: ' + str(cost) + ' lr: '+str(lr) + ' %gt: '+str(p_gt))
+        #logging.info(str(itr) + ' ' + str(cost))
 
 
-    if (itr) % VAL_INTERVAL == 2:
-      # Run through validation set.
-      feed_dict = {val_model.lr: 0.0,
-                   val_model.prefix: 'val',
-                   val_model.iter_num: np.float32(itr)}
-      _, val_summary_str, val_loss = sess.run([val_model.train_op, val_model.summ_op, val_model.loss],
-                                     feed_dict)
-      summary_writer_val.add_summary(val_summary_str, itr)
-      #summary_writer.add_summary(val_summary_str, itr)  # keep this in case summary_writer_val doesn't work as intended
+        if (itr) % VAL_INTERVAL == 2:
+          # Run through validation set.
+          feed_dict = {val_model.lr: 0.0,
+                       val_model.prefix: 'val',
+                       val_model.iter_num: np.float32(itr)}
+          _, val_summary_str, val_loss = sess.run([val_model.train_op, val_model.summ_op, val_model.loss],
+                                         feed_dict)
+          summary_writer_val.add_summary(val_summary_str, itr)
+          #summary_writer.add_summary(val_summary_str, itr)  # keep this in case summary_writer_val doesn't work as intended
 
-    if (itr) % SAVE_INTERVAL == 2:
+        if (itr) % SAVE_INTERVAL == 2:
+          tf.logging.info('Saving model.')
+          saver.save(sess, FLAGS.output_dir + '/model' + str(itr))
+        if val_loss < lowest_loss and itr >= model.ep_zero_gt : # >= 25000: # should depend on the value of schedsamp-k, but am too lazy to do
+                                                        # that right now. Ignore good values in the area where a lot of ground truth data is used.
+            best_save_path = os.path.join(FLAGS.output_dir, 'best_weights')
+            best_save_path = saver_best.save(sess, best_save_path, global_step=itr + 1)
+            logging.info("- Found new best accuracy, saving in {}".format(best_save_path))
+            lowest_loss = val_loss
+            train_time_lowest = str(datetime.timedelta(seconds=int(time.time() - start_time)))
+
+        if (itr) % SUMMARY_INTERVAL:
+          summary_writer.add_summary(summary_str, itr)
+
       tf.logging.info('Saving model.')
       saver.save(sess, FLAGS.output_dir + '/model' + str(itr))
-    if val_loss < lowest_loss and itr >= model.ep_zero_gt : # >= 25000: # should depend on the value of schedsamp-k, but am too lazy to do
-                                                    # that right now. Ignore good values in the area where a lot of ground truth data is used.
-        best_save_path = os.path.join(FLAGS.output_dir, 'best_weights')
-        best_save_path = saver_best.save(sess, best_save_path, global_step=itr + 1)
-        logging.info("- Found new best accuracy, saving in {}".format(best_save_path))
-        lowest_loss = val_loss
-        train_time_lowest = str(datetime.timedelta(seconds=int(time.time() - start_time)))
 
-    if (itr) % SUMMARY_INTERVAL:
-      summary_writer.add_summary(summary_str, itr)
-
-  tf.logging.info('Saving model.')
-  saver.save(sess, FLAGS.output_dir + '/model' + str(itr))
-
-  # dump: time taken, #params, best validation error
-  infodict = {'train_time': str(datetime.timedelta(seconds=int(time.time() - start_time))),
-              'train_time_lowest': train_time_lowest, 'lowest_val_loss': str(lowest_loss),
-              'num_trainable_params': str(model.n_parameters)}
+      # dump: time taken, #params, best validation error
+      infodict = {'train_time': str(datetime.timedelta(seconds=int(time.time() - start_time))),
+                  'train_time_lowest': train_time_lowest, 'lowest_val_loss': str(lowest_loss),
+                  'num_trainable_params': str(model.n_parameters)}
   utils.export_config_json(infodict, os.path.join(OUT_DIR, 'train_info.json'))
 
   tf.logging.info('Training complete')
