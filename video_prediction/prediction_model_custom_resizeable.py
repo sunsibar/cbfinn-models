@@ -79,7 +79,7 @@ class FramePredictorFinn(object):
                 specified for DNA model.
         """
 
-        k = k
+        self.k = k
         use_state = False
         num_masks = model_config['num_masks']
         subtype_key = 'Finn_subtype' if 'Finn_subtype' in model_config.keys() else 'model_subtype'
@@ -101,6 +101,13 @@ class FramePredictorFinn(object):
         #self.non_conv_rnn_mode = model_config['non_conv_rnn_mode']
         #self.rnn_mode = model_config['rnn_mode']
 
+        try:
+            self.fully_connected_bottleneck = model_config['fully_connected_bottleneck']
+            if not self.fully_connected_bottleneck:
+                self.bottleneck_filter_size = model_config['bottleneck_filter_size']
+        except KeyError:
+            self.fully_connected_bottleneck = False
+            self.bottleneck_filter_size = model_config['filter_size']
         self.filter_size_first = model_config['filter_size_first']
         self.filter_size     = model_config['filter_size']
         self.conv_stride     = model_config['conv_stride']
@@ -125,13 +132,22 @@ class FramePredictorFinn(object):
 
         n_layers = (len(self.encoder_layers_sz) + len(self.decoder_layers_sz) + 1)
         n_pool_unpool = np.sum(self.pool_where_enc) + np.sum(self.unpool_where_dec) +4 # +4: the first layer downsamples, always; plus enc3, plus enc4, plus enc7 at the end
-        self.lstm_size = np.int32(np.array(self.encoder_layers_sz + [self.bottleneck_layers_sz] + self.decoder_layers_sz))
+        self.lstm_size = self.encoder_layers_sz + [self.bottleneck_layers_sz]
+        if self.fully_connected_bottleneck:
+            self.lstm_size += [self.bottleneck_layers_sz]
+        self.lstm_size += self.decoder_layers_sz
+        self.lstm_size = np.int32(np.array(self.lstm_size))
         # variables storing stuff at each timestep
         self.encs = [[] for _ in range(n_pool_unpool)]
         self.hidden_layers = [[] for _ in range(n_layers)]
         self.lstm_states = [[] for _ in range(len(self.lstm_size))]
         # stores the states from the latest round for each layer:
         lstm_states = [None for _ in range(len(self.lstm_size))]
+        if self.fully_connected_bottleneck:
+            self.encs += [[]]
+            self.hidden_layers += [[]]
+            self.lstm_states += [[]]
+            lstm_states += [None]
         assert np.sum(self.pool_where_enc) == np.sum(self.unpool_where_dec), "down- and upsampling don't correspond"
 
         #self.enc0, self.enc1, self.enc2, self.enc3, self.enc4, self.enc5, self.enc6, self.enc7 = [], [], [], [], [], [], [], []
@@ -143,24 +159,24 @@ class FramePredictorFinn(object):
         self.gen_states, self.gen_images = [], []
         current_state = states[0]
 
-        if k == -1:
+        if self.k == -1:
             self.feedself = True
             self.perc_ground_truth = tf.constant(0.)
         else:
             # Scheduled sampling:
             # Calculate number of ground-truth frames to pass in.
             if self.schedule == 'linear':
-                gt_perc_fun = lambda it_num: tf.maximum(0., 1. - it_num / k * 1.)
+                gt_perc_fun = lambda it_num: tf.maximum(0., 1. - it_num / self.k * 1.)
             elif self.schedule == 'logistic':
-                gt_perc_fun = lambda it_num: (k / (k + tf.exp(it_num / k)))
+                gt_perc_fun = lambda it_num: (self.k / (self.k + tf.exp(it_num / self.k)))
             else:
                 raise ValueError(
                     "Unknown value for parameter 'schedule': " + self.schedule + "; allowed are strings 'logistic' and 'linear'. ")
 
             # num_ground_truth = tf.to_int32(
             #    tf.round(tf.to_float(batch_size) * (k / (k + tf.exp(iter_num / k)))))
-            num_ground_truth = tf.to_int32(tf.round(tf.to_float(self.batch_size) * gt_perc_fun(iter_num)))
             self.perc_ground_truth = gt_perc_fun(iter_num)
+            num_ground_truth = tf.to_int32(tf.round(tf.to_float(self.batch_size) * self.perc_ground_truth))
             self.feedself = False
 
         for image, action in zip(images[:-1], actions[:-1]):
@@ -171,7 +187,9 @@ class FramePredictorFinn(object):
             hidden_layers = [[] for _ in range(n_layers)]
             encs = [[] for _ in range(n_pool_unpool)]
             encs_to_concat = []
-
+            if self.fully_connected_bottleneck:
+                hidden_layers += [[]]
+                encs += [[]]
             done_warm_start = len(self.gen_images) > context_frames - 1
             with slim.arg_scope(
                     [lstm_func, slim.layers.conv2d, slim.layers.fully_connected,
@@ -244,11 +262,37 @@ class FramePredictorFinn(object):
                 # ~~~ Bottleneck
                 assert self.lstm_size[hidden_count] == self.bottleneck_layers_sz
                 assert hidden_count == len(self.encoder_layers_sz)
-                bottleneck_hidden, lstm_states[hidden_count] = lstm_func(
-                    encs[enc_count-1], lstm_states[hidden_count], self.lstm_size[hidden_count], scope='state'+str(hidden_count+1))  # last 8x8
-                bottleneck_hidden = tf_layers.layer_norm(bottleneck_hidden, scope='layer_norm'+str(hidden_count+3))
-                hidden_layers[hidden_count] = bottleneck_hidden
-                hidden_count += 1
+                if not self.fully_connected_bottleneck:
+                    bottleneck_hidden, lstm_states[hidden_count] = lstm_func(
+                        encs[enc_count-1], lstm_states[hidden_count], self.lstm_size[hidden_count],
+                        filter_size=self.bottleneck_filter_size[0], scope='state'+str(hidden_count+1))  # last 8x8
+                    bottleneck_hidden = tf_layers.layer_norm(bottleneck_hidden, scope='layer_norm'+str(hidden_count+3))
+                    hidden_layers[hidden_count] = bottleneck_hidden
+                    hidden_count += 1
+                else:
+                    logging.info("shape before bottleneck: " + str(hidden_layers[hidden_count-1].shape))
+                    h_before_bottleneck = encs[enc_count-1]
+                    h_before = tf.layers.flatten(encs[enc_count-1])
+                    bn_cell =  tf.contrib.rnn.LayerNormBasicLSTMCell(self.lstm_size[hidden_count], reuse=reuse)
+                    if lstm_states[hidden_count] is None:
+                        lstm_states[hidden_count] = bn_cell.zero_state(h_before.shape[0], dtype=tf.float32)
+                    bottleneck_hidden, lstm_states[hidden_count] = bn_cell(h_before, lstm_states[hidden_count], scope='lstm_bottleneck')
+                    #print("Cannot set name for LSTM cell type LayerNormBasicLSTMCell; name is: " +bn_cell.name)
+                    hidden_layers[hidden_count] = bottleneck_hidden
+                    hidden_count += 1
+                    # one more fc layer to bring features back to old size:
+                    assert self.lstm_size[hidden_count] == self.decoder_layers_sz[0]
+                    bn_cell_output_size = self.lstm_size[hidden_count]  * h_before_bottleneck.shape[1] * h_before_bottleneck.shape[2]
+                    bn_cell             = tf.contrib.rnn.LayerNormBasicLSTMCell(bn_cell_output_size,  reuse=reuse)
+                    if lstm_states[hidden_count] is None:
+                        lstm_states[hidden_count] = bn_cell.zero_state(bottleneck_hidden.shape[0], dtype=tf.float32)
+                    h, lstm_states[hidden_count] = bn_cell(bottleneck_hidden, lstm_states[hidden_count], scope='lstm_after_bottleneck')
+                    #print("Cannot set name for LSTM cell type LayerNormBasicLSTMCell; name is: " +bn_cell.name)
+                    # reshape back to height x width x chan
+                    reshape_to = [self.batch_size, h_before_bottleneck.shape[1].value, h_before_bottleneck.shape[2].value, self.lstm_size[hidden_count]]
+                    hidden_layers[hidden_count] = tf.reshape(h, reshape_to)
+                    hidden_count += 1
+
                 # originally enc4, first transpose convolution
                 encs[enc_count] = slim.layers.conv2d_transpose(
                     hidden_layers[hidden_count-1], hidden_layers[hidden_count-1].get_shape()[3],
@@ -257,9 +301,12 @@ class FramePredictorFinn(object):
                 decoder_count = 1
 
                 # ~~~ Decoder
-                assert hidden_count == len(self.encoder_layers_sz)+1
+                assert hidden_count == len(self.encoder_layers_sz)+1 or  hidden_count == len(self.encoder_layers_sz)+2
 
+                #decoder_layers_sz_remaining = self.decoder_layers_sz[1:] if self.fully_connected_bottleneck else self.decoder_layers_sz
+                # Need all decoder layers here, because we need to upsample enough many times
                 for i, feat_sz in enumerate(self.decoder_layers_sz):
+                    assert  self.lstm_size[hidden_count] == feat_sz
                     hidden, lstm_states[hidden_count] = lstm_func(
                         encs[enc_count-1], lstm_states[hidden_count], self.lstm_size[hidden_count], scope='state'+str(hidden_count+2))
                     hidden_layers[hidden_count] = tf_layers.layer_norm(hidden, scope='layer_norm'+str(hidden_count+3))
