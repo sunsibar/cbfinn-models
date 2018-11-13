@@ -306,7 +306,7 @@ def main(unused_argv):
 
   tf_config = tf.ConfigProto(log_device_placement=False)  # logging device pl. is too verbose
   tf_config.gpu_options.allow_growth = True
-  tf_config.gpu_options.per_process_gpu_memory_fraction = 0.6
+  #tf_config.gpu_options.per_process_gpu_memory_fraction = 0.6
   with tf.Session(config=tf_config) as sess:
 
   #sess = tf.InteractiveSession()
