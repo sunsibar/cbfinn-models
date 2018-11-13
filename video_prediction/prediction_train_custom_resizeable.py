@@ -13,11 +13,14 @@
 # limitations under the License.
 # ==============================================================================
 
-"""Code for training the prediction model."""
+"""Code for training the prediction model.
+    Trains types 'custom_Finn2015' and 'autoencoder_like_Finn2015'. """
 
 import numpy as np
 import tensorflow as tf
 import logging
+import argparse
+import importlib
 import datetime
 import time
 
@@ -26,13 +29,24 @@ from tensorflow.python.platform import flags
 
 from prediction_input_custom import build_tfrecord_input
 from prediction_model_custom_resizeable import FramePredictorFinn
+from prediction_model_custom_autoencoder_like import FramePredictorAutoencoderLike
 
 import os, sys
 sys.path.append(os.path.abspath(os.path.join(os.path.dirname(__file__), '../../../')))
 #from src.utils.utils import set_logger
 import src.utils.utils as utils
 
-from src.frame_predictor_Finn2015_config import train_config, model_config
+
+# - - -  parse any command line args  - - - #
+parser = argparse.ArgumentParser(description='Train a model according to a config.')
+parser.add_argument('--config', dest='config', type=str, default='src.frame_predictor_Finn2015_config', action='store',
+                    help='Should be the filename without .py, prepended by any paths by dots, of a file containing '
+                         'the model configuration as a python dictionary.')
+args = parser.parse_args()
+i = importlib.import_module(args.config)
+train_config, model_config = (i.train_config, i.model_config)
+print("Config loaded: "+args.config)
+#from src.frame_predictor_Finn2015_config import train_config, model_config
 
 # How often to record tensorboard summaries.
 SUMMARY_INTERVAL = train_config['summarize_every'] #1000
@@ -132,6 +146,15 @@ def mean_squared_error(true, pred):
   """
   return tf.reduce_sum(tf.square(true - pred)) / tf.to_float(tf.size(pred))
 
+def get_Finn_model_class(model_type_str):
+    if model_type_str == 'Finn2015':
+        raise ValueError("Use train code from prediction_train_custom.py instead for training the original model")
+    elif model_type_str == 'custom_Finn2015':
+        return FramePredictorFinn
+    elif model_type_str == 'autoencoder_like_Finn2015':
+        return FramePredictorAutoencoderLike
+    else:
+        raise ValueError("Finn model type not recognized: "+model_type_str)
 
 class Model(object):
 
@@ -140,8 +163,10 @@ class Model(object):
                actions=None,
                states=None,
                sequence_length=None,
-               reuse_scope=None):
+               reuse_scope=None,
+               model_type_str='custom_Finn2015'):  # 'custom_Finn2015' or 'autoencoder_like_Finn2015'. 'Finn2015' might also work.
 
+    core_model_cls = get_Finn_model_class(model_type_str)
     if sequence_length is None:
       sequence_length = FLAGS.sequence_length
 
@@ -162,7 +187,7 @@ class Model(object):
     #images = [tf.squeeze(img) for img in images]
 
     if reuse_scope is None:
-      self.base_model = FramePredictorFinn(
+      self.base_model = core_model_cls(
           images,
           actions,
           states,
@@ -173,7 +198,7 @@ class Model(object):
           schedule=train_config['freerun_schedule'])
     else:  # If it's a validation or test model.
       with tf.variable_scope(reuse_scope, reuse=True):
-        self.base_model = FramePredictorFinn(
+        self.base_model = core_model_cls(
             images,
             actions,
             states,
@@ -189,12 +214,12 @@ class Model(object):
     if FLAGS.schedule == 'linear':
         gt_perc_fun = lambda iter_num: tf.maximum(0., 1. - iter_num / FLAGS.schedsamp_k *1.)  \
             if FLAGS.schedsamp_k != -1 else 0
-        self.ep_zero_gt = FLAGS.schedsamp_k / 2.
+        self.ep_half_gt = FLAGS.schedsamp_k / 2.
     elif FLAGS.schedule == 'logistic':
         gt_perc_fun = lambda iter_num: (FLAGS.schedsamp_k / (FLAGS.schedsamp_k + tf.exp(iter_num / FLAGS.schedsamp_k))) \
             if FLAGS.schedsamp_k != -1 else 0
         #self.ep_zero_gt = (np.log(100 * FLAGS.schedsamp_k) * FLAGS.schedsamp_k)  # => episode when perc_gt is ca 1%
-        self.ep_zero_gt = np.log(FLAGS.schedsamp_k) * FLAGS.schedsamp_k  # => episode when perc_gt is ca 1%
+        self.ep_half_gt = np.log(FLAGS.schedsamp_k) * FLAGS.schedsamp_k  # => episode when perc_gt is ca 1%
     else:
         raise ValueError("Unknown value for flag 'schedule': "+FLAGS.schedule+"; allowed are 'logistic' and 'linear'. ")
     self.perc_ground_truth = gt_perc_fun(self.iter_num)
@@ -333,7 +358,7 @@ def main(unused_argv):
         if (itr) % SAVE_INTERVAL == 2:
           tf.logging.info('Saving model.')
           saver.save(sess, FLAGS.output_dir + '/model' + str(itr))
-        if val_loss < lowest_loss and itr >= model.ep_zero_gt : # >= 25000: # should depend on the value of schedsamp-k, but am too lazy to do
+        if val_loss < lowest_loss and itr >= model.ep_half_gt : # >= 25000: # should depend on the value of schedsamp-k, but am too lazy to do
                                                         # that right now. Ignore good values in the area where a lot of ground truth data is used.
             best_save_path = os.path.join(FLAGS.output_dir, 'best_weights')
             best_save_path = saver_best.save(sess, best_save_path, global_step=itr + 1)

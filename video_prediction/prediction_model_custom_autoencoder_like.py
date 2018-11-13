@@ -45,7 +45,7 @@ RELU_SHIFT = 1e-12
 DNA_KERN_SIZE = 5
 
 
-class FramePredictorFinn(object):
+class FramePredictorAutoencoderLike(object):
     ''' Model 'at the core' of original 'Model' class, to store all the in-between features.
         Actual Model will get this one as an attribute.'''
     #def construct_model(
@@ -127,7 +127,6 @@ class FramePredictorFinn(object):
         self.batch_size, self.img_height, self.img_width, self.color_channels = images[0].get_shape()[0:4]
         lstm_func = basic_conv_lstm_cell
 
-        self.masks = []
         self.transformed = []
 
         n_layers = (len(self.encoder_layers_sz) + len(self.decoder_layers_sz) + 1)
@@ -138,6 +137,7 @@ class FramePredictorFinn(object):
         self.lstm_size += self.decoder_layers_sz
         self.lstm_size = np.int32(np.array(self.lstm_size))
         # variables storing stuff at each timestep
+        self.masks = tf.constant(0)
         self.encs = [[] for _ in range(n_pool_unpool)]
         self.hidden_layers = [[] for _ in range(n_layers)]
         self.lstm_states = [[] for _ in range(len(self.lstm_size))]
@@ -327,42 +327,23 @@ class FramePredictorFinn(object):
                         enc_count += 1
 
                 # ~~~ Final layers
-                if dna:
-                    # Using largest hidden state for predicting untied conv kernels.
-                    very_last_enc = slim.layers.conv2d_transpose(
-                        last_enc, DNA_KERN_SIZE ** 2, 1, stride=1, scope='convt_last')
-                else:
+                #if dna:
+                #    # Using largest hidden state for predicting untied conv kernels.
+                #    very_last_enc = slim.layers.conv2d_transpose(
+                #        last_enc, DNA_KERN_SIZE ** 2, 1, stride=1, scope='convt_last')
+                #else:
+                if True:
                     # Using largest hidden state for predicting a new image layer.
                     very_last_enc = slim.layers.conv2d_transpose(
                         last_enc, self.color_channels, 1, stride=1, scope='convt_last')
                     # This allows the network to also generate one image from scratch,
                     # which is useful when regions of the image become unoccluded.
-                    transformed = [tf.nn.sigmoid(very_last_enc)]
+                    transformed = tf.nn.sigmoid(very_last_enc)
                 encs[enc_count] = very_last_enc #
-                if stp:
-                    stp_input0 = tf.reshape(bottleneck_hidden, [int(self.batch_size), -1])
-                    stp_input1 = slim.layers.fully_connected(
-                        stp_input0, 100, scope='fc_stp')
-                    transformed += stp_transformation(prev_image, stp_input1, num_masks)
-                elif cdna:
-                    cdna_input = tf.reshape(bottleneck_hidden, [int(self.batch_size), -1])
-                    transformed += cdna_transformation(prev_image, cdna_input, num_masks,
-                                                       int(self.color_channels))
-                elif dna:
-                    # Only one mask is supported (more should be unnecessary).
-                    if num_masks != 1:
-                        raise ValueError('Only one mask is supported for DNA model.')
-                    transformed = [dna_transformation(prev_image, very_last_enc)]
 
-                masks = slim.layers.conv2d_transpose(
-                    last_enc, num_masks + 1, 1, stride=1, scope='convt7')
-                masks = tf.reshape(
-                    tf.nn.softmax(tf.reshape(masks, [-1, num_masks + 1])),
-                    [int(self.batch_size), int(self.img_height), int(self.img_width), num_masks + 1])
-                mask_list = tf.split(masks, num_masks + 1, 3)
-                output = mask_list[0] * prev_image
-                for layer, mask in zip(transformed, mask_list[1:]):
-                    output += layer * mask
+
+                #output = prev_image + transformed
+                output =  transformed
                 self.gen_images.append(output)
 
                 current_state = slim.layers.fully_connected(
@@ -372,7 +353,6 @@ class FramePredictorFinn(object):
                     activation_fn=None)
 
                 self.gen_states.append(current_state)
-                self.masks.append(masks)
                 self.transformed.append(transformed)
                 #lstm_states = [lstm_state1, lstm_state2, lstm_state3, lstm_state4, lstm_state5, lstm_state6, lstm_state7]
                 #encs = [enc0, enc1, enc2, enc3, enc4, enc5, enc6, enc7]
@@ -387,115 +367,6 @@ class FramePredictorFinn(object):
     def return_generated(self):
         return self.gen_images, self.gen_states
 
-
-## Utility functions
-def stp_transformation(prev_image, stp_input, num_masks):
-  """Apply spatial transformer predictor (STP) to previous image.
-
-  Args:
-    prev_image: previous image to be transformed.
-    stp_input: hidden layer to be used for computing STN parameters.
-    num_masks: number of masks and hence the number of STP transformations.
-  Returns:
-    List of images transformed by the predicted STP parameters.
-  """
-  # Only import spatial transformer if needed.
-  import os
-  import sys
-  sys.path.insert(1, os.path.join(sys.path[0], '..'))
-  from transformer.spatial_transformer import transformer
-
-  identity_params = tf.convert_to_tensor(
-      np.array([1.0, 0.0, 0.0, 0.0, 1.0, 0.0], np.float32))
-  transformed = []
-  for i in range(num_masks - 1):
-    params = slim.layers.fully_connected(
-        stp_input, 6, scope='stp_params' + str(i),
-        activation_fn=None) + identity_params
-    transformed.append(transformer(prev_image, params, (prev_image.get_shape()[1], prev_image.get_shape()[2])))   # Note: noob added the last argument to transformer here, could be that height and width are reversed
-
-  return transformed
-
-
-def cdna_transformation(prev_image, cdna_input, num_masks, color_channels):
-  """Apply convolutional dynamic neural advection to previous image.
-
-  Args:
-    prev_image: previous image to be transformed.
-    cdna_input: hidden lyaer to be used for computing CDNA kernels.
-    num_masks: the number of masks and hence the number of CDNA transformations.
-    color_channels: the number of color channels in the images.
-  Returns:
-    List of images transformed by the predicted CDNA kernels.
-  """
-  batch_size = int(cdna_input.get_shape()[0])
-
-  # Predict kernels using linear function of last hidden layer.
-  cdna_kerns = slim.layers.fully_connected(
-      cdna_input,
-      DNA_KERN_SIZE * DNA_KERN_SIZE * num_masks,
-      scope='cdna_params',
-      activation_fn=None)
-
-  # Reshape and normalize.
-  cdna_kerns = tf.reshape(
-      cdna_kerns, [batch_size, DNA_KERN_SIZE, DNA_KERN_SIZE, 1, num_masks])
-  cdna_kerns = tf.nn.relu(cdna_kerns - RELU_SHIFT) + RELU_SHIFT
-  norm_factor = tf.reduce_sum(cdna_kerns, [1, 2, 3], keepdims=True)
-  cdna_kerns /= norm_factor
-
-  cdna_kerns = tf.tile(cdna_kerns, [1, 1, 1, color_channels, 1])
-  cdna_kerns = tf.split(cdna_kerns, batch_size, 0)
-  prev_images = tf.split(prev_image, batch_size, 0)
-
-  # Transform image.
-  transformed = []
-  for kernel, preimg in zip(cdna_kerns, prev_images):
-    kernel = tf.squeeze(kernel)
-    if len(kernel.get_shape()) == 3:
-      # => either num_masks is 1, or num input channels is 1.
-      if num_masks == 1:
-        kernel = tf.expand_dims(kernel, -1)
-      elif color_channels == 1:
-        kernel = tf.expand_dims(kernel, -2)
-      else:
-          raise RuntimeError("Check where kernels size is coming from, exactly. How could that happen?")
-    transformed.append(
-        tf.nn.depthwise_conv2d(preimg, kernel, [1, 1, 1, 1], 'SAME'))
-  transformed = tf.concat(transformed, 0)
-  transformed = tf.split(transformed, num_masks, 3)
-  return transformed
-
-
-def dna_transformation(prev_image, dna_input):
-  """Apply dynamic neural advection to previous image.
-
-  Args:
-    prev_image: previous image to be transformed.
-    dna_input: hidden lyaer to be used for computing DNA transformation.
-  Returns:
-    List of images transformed by the predicted CDNA kernels.
-  """
-  # Construct translated images.
-  prev_image_pad = tf.pad(prev_image, [[0, 0], [2, 2], [2, 2], [0, 0]])
-  image_height = int(prev_image.get_shape()[1])
-  image_width = int(prev_image.get_shape()[2])
-
-  inputs = []
-  for xkern in range(DNA_KERN_SIZE):
-    for ykern in range(DNA_KERN_SIZE):
-      inputs.append(
-          tf.expand_dims(
-              tf.slice(prev_image_pad, [0, xkern, ykern, 0],
-                       [-1, image_height, image_width, -1]), [3]))
-  inputs = tf.concat(inputs, 3)
-
-  # Normalize channels to 1.
-  kernel = tf.nn.relu(dna_input - RELU_SHIFT) + RELU_SHIFT
-  kernel = tf.expand_dims(
-      kernel / tf.reduce_sum(
-          kernel, [3], keep_dims=True), [4])
-  return tf.reduce_sum(kernel * inputs, [3], keep_dims=False)
 
 
 def scheduled_sample(ground_truth_x, generated_x, batch_size, num_ground_truth):

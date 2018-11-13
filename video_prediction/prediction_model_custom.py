@@ -101,9 +101,9 @@ class CoreModel(object):
                   raise ValueError(
                       "Unknown value for parameter 'schedule': " + self.schedule + "; allowed are strings 'logistic' and 'linear'. ")
 
-              # num_ground_truth = tf.to_int32(
+              # self.num_ground_truth = tf.to_int32(
               #    tf.round(tf.to_float(batch_size) * (k / (k + tf.exp(iter_num / k)))))
-              num_ground_truth = tf.to_int32(tf.round(tf.to_float(self.batch_size) * gt_perc_fun(iter_num)))
+              self.num_ground_truth = tf.to_int32(tf.round(tf.to_float(self.batch_size) * gt_perc_fun(iter_num)))
               self.perc_ground_truth = gt_perc_fun(iter_num)
               self.feedself = False
 
@@ -133,7 +133,7 @@ class CoreModel(object):
               elif done_warm_start:
                 # Scheduled sampling
                 prev_image = scheduled_sample(image, self.gen_images[-1], self.batch_size,
-                                              num_ground_truth)
+                                              self.num_ground_truth)
               else:
                 # Always feed in ground_truth
                 prev_image = image
