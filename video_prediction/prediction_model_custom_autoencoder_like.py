@@ -120,6 +120,10 @@ class FramePredictorAutoencoderLike(object):
         # number of features in each encoding layer
         self.bottleneck_layers_sz = model_config['bottleneck_layers_sz']
 
+        if 'add_last_frame' in model_config:
+            self.add_last_frame = model_config['add_last_frame']
+        else:
+            self.add_last_frame = False
         # ~ ~ ~ ~ ~ ~ ~ ~ ~ ~
 
         if stp + cdna + dna != 1:
@@ -335,15 +339,16 @@ class FramePredictorAutoencoderLike(object):
                 if True:
                     # Using largest hidden state for predicting a new image layer.
                     very_last_enc = slim.layers.conv2d_transpose(
-                        last_enc, self.color_channels, 1, stride=1, scope='convt_last')
+                        last_enc, self.color_channels, 1, stride=1, activation_fn=None, scope='convt_last')
                     # This allows the network to also generate one image from scratch,
                     # which is useful when regions of the image become unoccluded.
                     transformed = tf.nn.sigmoid(very_last_enc)
                 encs[enc_count] = very_last_enc #
 
-
-                #output = prev_image + transformed
-                output =  transformed
+                if self.add_last_frame:
+                    output = prev_image + transformed
+                else:
+                    output =  transformed
                 self.gen_images.append(output)
 
                 current_state = slim.layers.fully_connected(

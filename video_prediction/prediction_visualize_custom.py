@@ -40,7 +40,9 @@ print("parameters set")
 #weights_path = '../../../../trained_models/resized_Finn/custom_Finn2015_narrow_short_CDNA/18-Nov-09_10h36-49'
 #weights_path = '../../../../trained_models/resized_Finn/leonhard/custom_Finn2015_narrow_long_CDNA/18-Nov-09_19h04-07'
 #weights_path = '../../../../trained_models/resized_Finn/zampone/custom_Finn2015_narrow_long_CDNA/18-Nov-12_09h26-55'
-weights_path = '../../../../trained_models/resized_Finn/leonhard/custom_Finn2015_narrow_long_CDNA/18-Nov-11_15h54-46'
+#weights_path = '../../../../trained_models/resized_Finn/leonhard/custom_Finn2015_narrow_long_CDNA/18-Nov-11_15h54-46'
+#weights_path = '../../../../trained_models/resized_Finn/leonhard/custom_Finn2015_narrow_short_CDNA/18-Nov-13_00h28-19'
+weights_path = '../../../../trained_models/resized_Finn/zampone/autoencoder_like_Finn2015_narrow_long_CDNA/18-Nov-14_11h46-32'
 #weights_path = '../../../../trained_models/resized_Finn/18-Nov-08_15h17-24'
 #weights_path = '../../../../trained_models/Finn2015/leonhard/18-Oct-20_11h39-26_clut'
 #weights_path = '../../../..//trained_models/Finn2015/leonhard/18-Oct-18_00h36-53'
@@ -149,11 +151,12 @@ if __name__ == '__main__':
         # --> inputs: batch_size x seq_len x h x w x c.
         #     prediction: list with 19 frames (?batch_size, h, w, c).
         plt.imshow(prediction[-1][0][...,-1]*255, cmap='gray')
-        for i in range(n_masks):
-            #plt.figure()
-            plt.imshow(masks[-1][0][..., i] * 255, cmap='gray')
+        if masks: #if not train_config['model'] == 'autoencoder_like_Finn2015':
+            for i in range(n_masks):
+                #plt.figure()
+                plt.imshow(masks[-1][0][..., i] * 255, cmap='gray')
         prediction = np.stack(prediction, axis=0).transpose([1,0,2,3,4])
-        if not train_config['model'] == 'autoencoder_like_Finn2015':
+        if masks: #if not train_config['model'] == 'autoencoder_like_Finn2015':
             masks = np.stack(masks, axis=0).transpose([1,0,2,3,4])
         # --> batch_size x seq_length x h x w x c
         targets = inputs[:, 1:]
@@ -165,7 +168,7 @@ if __name__ == '__main__':
         sequence_targets.append(targets)
         sequence_inputs.append(inputs)
         #for i in range(n_masks):
-        if not train_config['model'] == 'autoencoder_like_Finn2015':
+        if masks: #if not train_config['model'] == 'autoencoder_like_Finn2015':
             sequence_masks.append(masks)
 
     sequence_predictions = np.concatenate(sequence_predictions, axis=0) * 255
