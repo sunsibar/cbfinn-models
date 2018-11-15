@@ -346,6 +346,7 @@ class FramePredictorAutoencoderLike(object):
                 encs[enc_count] = very_last_enc #
 
                 if self.add_last_frame:
+                    transformed = 2*transformed -1 # rescale to [-1,1]
                     output = prev_image + transformed
                 else:
                     output =  transformed
