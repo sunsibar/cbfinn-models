@@ -114,7 +114,7 @@ class FramePredictorFinn(object):
         self.enc_filter_size = model_config['enc_filter_size']
         self.enc_stride      = model_config['enc_stride']
         self.encoder_layers_sz = model_config['encoder_layers_sz']
-        self.decoder_layers_sz = model_config['decoder_layers_sz']  # mirror encoder
+        self.decoder_layers_sz = model_config['decoder_layers_sz']
         self.pool_where_enc = model_config['pool_where_enc']
         self.unpool_where_dec = model_config['unpool_where_dec']
         # number of features in each encoding layer
@@ -229,6 +229,7 @@ class FramePredictorFinn(object):
                 encs_to_concat.append(encs[0])
 
                 for i, feat_sz in enumerate(self.encoder_layers_sz):
+                    assert feat_sz == self.lstm_size[i]
                     hidden, lstm_states[i] = lstm_func(
                         layer_before, lstm_states[i], self.lstm_size[i], scope='state'+str(i+1)
                     )
