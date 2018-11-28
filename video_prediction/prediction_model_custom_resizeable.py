@@ -119,8 +119,12 @@ class FramePredictorFinn(object):
         self.unpool_where_dec = model_config['unpool_where_dec']
         # number of features in each encoding layer
         self.bottleneck_layers_sz = model_config['bottleneck_layers_sz']
+        if not 'padding' in self.model_config:
+            self.model_config['padding'] = 'same'
+        self.padding = 'same' if self.model_config['padding'] == 'same' else 'valid'  # one of 'same', 'valid' # -- use valid in case of custom padding
 
-        # ~ ~ ~ ~ ~ ~ ~ ~ ~ ~
+
+            # ~ ~ ~ ~ ~ ~ ~ ~ ~ ~
 
         if stp + cdna + dna != 1:
             raise ValueError('More than one, or no network option specified.')
@@ -129,6 +133,7 @@ class FramePredictorFinn(object):
 
         self.masks = []
         self.transformed = []
+        self.kernels = []
 
         n_layers = (len(self.encoder_layers_sz) + len(self.decoder_layers_sz) + 1)
         n_pool_unpool = np.sum(self.pool_where_enc) + np.sum(self.unpool_where_dec) +4 # +4: the first layer downsamples, always; plus enc3, plus enc4, plus enc7 at the end
@@ -179,9 +184,22 @@ class FramePredictorFinn(object):
             self.num_ground_truth = tf.to_int32(tf.round(tf.to_float(self.batch_size) * self.perc_ground_truth))
             self.feedself = False
 
-        for image, action in zip(images[:-1], actions[:-1]):
+        if self.model_config['padding'] == 'custom':
+            with tf.name_scope("padding"):  # todo: this could fail if the input shape is not known beforehand. Debug then, when you need it.
+                    self.input_shape = images[0].shape[1:3]
+                    self.input_shape = [v.value for v in self.input_shape]
+                    self.padding_array = tf_utils.calc_padding(self.input_shape[:2],
+                                          filter_sizes=[self.filter_size_first]+[self.enc_filter_size] * np.sum(self.pool_where_enc),
+                                          strides=[[2,2]]+[[self.enc_stride] * 2] * np.sum(self.pool_where_enc), lr=True)
+                    self.padding_array = np.concatenate(([[0, 0]], self.padding_array, [[0, 0]]), axis=0)
+                    images_padded = [tf.pad(img, self.padding_array) for img in images]
+        else:
+            images_padded = images
+
+        for anidx, (image, action) in enumerate(zip(images_padded[:-1], actions[:-1])):
             # Reuse variables after the first timestep.
             reuse = bool(self.gen_images)
+            img_unpadded = images[anidx]
 
             # variables re-written for each timestep
             hidden_layers = [[] for _ in range(n_layers)]
@@ -201,11 +219,21 @@ class FramePredictorFinn(object):
                     prev_image = self.gen_images[-1]
                 elif done_warm_start:
                     # Scheduled sampling
-                    prev_image = scheduled_sample(image, self.gen_images[-1], self.batch_size,
+                    prev_image = scheduled_sample(img_unpadded, self.gen_images[-1], self.batch_size,
                                                   self.num_ground_truth)
                 else:
                     # Always feed in ground_truth
-                    prev_image = image
+                    prev_image = img_unpadded
+
+                prev_image_unpadded = prev_image
+
+                if self.model_config['padding'] == 'custom':
+                    prev_image = tf.pad(prev_image, self.padding_array)
+
+                    #need un-padded version again in the end
+                    #unpad_slice = self.padding_array.astype(int)[1:3]  # only width x height dims
+                    #unpad_slice[:, 1] = self.input_shape[:2] + unpad_slice[:,0]  # right end of slice = left-padding + input size
+                    #prev_image_unpadded = prev_image[..., unpad_slice[0, 0]:unpad_slice[0, 1],  unpad_slice[1, 0]:unpad_slice[1, 1], :]
 
                 # Predicted state is always fed back in
                 state_action = tf.concat([action, current_state], 1)
@@ -218,11 +246,12 @@ class FramePredictorFinn(object):
                 encs[0] = slim.layers.conv2d(
                     prev_image,
                     self.encoder_layers_sz[0], #[5, 5],
-                    self.filter_size_first,
+                    self.filter_size_first,   # 'filter_size_first' is wrong, but leave it for compatibility with already trained models
                     stride=2,  # first conv downsamples
                     scope='scale1_conv1',
                     normalizer_fn=tf_layers.layer_norm,
-                    normalizer_params={'scope': 'layer_norm1'})
+                    normalizer_params={'scope': 'layer_norm1'},
+                    padding=self.padding)
                 enc_count = 1
                 hidden_count = 0
                 layer_before = encs[0]
@@ -239,7 +268,8 @@ class FramePredictorFinn(object):
                     if self.pool_where_enc[i]:
                         encs[enc_count] = slim.layers.conv2d(
                                 encs[enc_count-1], encs[enc_count-1].get_shape()[3], self.enc_filter_size,
-                                stride=self.enc_stride, scope='conv'+str(enc_count))
+                                stride=self.enc_stride, scope='conv'+str(enc_count),
+                                padding=self.padding)
                         layer_before = encs[enc_count]
                         encs_to_concat.append(encs[enc_count])
                         enc_count += 1
@@ -257,7 +287,8 @@ class FramePredictorFinn(object):
                 if use_state:
                     encs[enc_count-1] = tf.concat([encs[enc_count-1], smear], 3)
                 encs[enc_count] = slim.layers.conv2d(
-                    encs[enc_count-1], hidden_layers[hidden_count-1].get_shape()[3], [1, 1], stride=1, scope='conv'+str(hidden_count+2))
+                    encs[enc_count-1], hidden_layers[hidden_count-1].get_shape()[3], [1, 1], stride=1, scope='conv'+str(hidden_count+2),
+                    padding=self.padding)
                 enc_count += 1
 
                 # ~~~ Bottleneck
@@ -298,7 +329,7 @@ class FramePredictorFinn(object):
                 # originally enc4, first transpose convolution
                 encs[enc_count] = slim.layers.conv2d_transpose(
                     hidden_layers[hidden_count-1], hidden_layers[hidden_count-1].get_shape()[3],
-                    self.enc_filter_size, stride=self.enc_stride, scope='convt1')
+                    self.enc_filter_size, stride=self.enc_stride, scope='convt1',  padding=self.padding)
                 enc_count += 1
                 decoder_count = 1
 
@@ -318,14 +349,21 @@ class FramePredictorFinn(object):
                     # todo:   directly before the final 'warping'/whatever
                     if self.unpool_where_dec[i]:
                         hidden_layers[hidden_count-1] = tf.concat([hidden, encs_to_concat[-1-i]], 3)
+                        filter_size = self.enc_filter_size[0] #if not i == len(self.decoder_layers_sz)-1 else self.filter_size_first
                         encs[enc_count] = slim.layers.conv2d_transpose(
                             hidden_layers[hidden_count-1], hidden_layers[hidden_count-1].get_shape()[3],
-                            self.enc_filter_size[0], stride=self.enc_stride, scope='convt'+str(decoder_count+1),
-                            normalizer_fn=tf_layers.layer_norm,
+                            filter_size, stride=self.enc_stride, scope='convt'+str(decoder_count+1),
+                            padding=self.padding, normalizer_fn=tf_layers.layer_norm,
                             normalizer_params={'scope': 'layer_norm'+str(enc_count+2)})
                         last_enc = encs[enc_count]
                         decoder_count += 1
                         enc_count += 1
+
+                if self.model_config['padding'] == 'custom':
+                    # un-pad
+                    unpad_slice = self.padding_array.astype(int)[1:3]  # only width x height dims
+                    unpad_slice[:, 1] = self.input_shape[:2] + unpad_slice[:, 0]  # right end of slice = left-padding + input size
+                    last_enc = last_enc[..., unpad_slice[0, 0]:unpad_slice[0, 1], unpad_slice[1, 0]:unpad_slice[1, 1], :]
 
                 # ~~~ Final layers
                 if dna:
@@ -344,16 +382,18 @@ class FramePredictorFinn(object):
                     stp_input0 = tf.reshape(bottleneck_hidden, [int(self.batch_size), -1])
                     stp_input1 = slim.layers.fully_connected(
                         stp_input0, 100, scope='fc_stp')
-                    transformed += stp_transformation(prev_image, stp_input1, num_masks)
+                    transformed += stp_transformation(prev_image_unpadded, stp_input1, num_masks)
                 elif cdna:
                     cdna_input = tf.reshape(bottleneck_hidden, [int(self.batch_size), -1])
-                    transformed += cdna_transformation(prev_image, cdna_input, num_masks,
-                                                       int(self.color_channels))
+                    add_to, cdna_kernels = cdna_transformation(prev_image_unpadded, cdna_input, num_masks,
+                                                       int(self.color_channels), return_transforms=True)
+                    transformed += add_to
+                    self.kernels.append(cdna_kernels)
                 elif dna:
                     # Only one mask is supported (more should be unnecessary).
                     if num_masks != 1:
                         raise ValueError('Only one mask is supported for DNA model.')
-                    transformed = [dna_transformation(prev_image, very_last_enc)]
+                    transformed = [dna_transformation(prev_image_unpadded, very_last_enc)]
 
                 masks = slim.layers.conv2d_transpose(
                     last_enc, num_masks + 1, 1, stride=1, scope='convt7')
@@ -361,7 +401,7 @@ class FramePredictorFinn(object):
                     tf.nn.softmax(tf.reshape(masks, [-1, num_masks + 1])),
                     [int(self.batch_size), int(self.img_height), int(self.img_width), num_masks + 1])
                 mask_list = tf.split(masks, num_masks + 1, 3)
-                output = mask_list[0] * prev_image
+                output = mask_list[0] * prev_image_unpadded
                 for layer, mask in zip(transformed, mask_list[1:]):
                     output += layer * mask
                 self.gen_images.append(output)
@@ -384,6 +424,19 @@ class FramePredictorFinn(object):
                     self.hidden_layers[i].append(hidd)
                 for i, lstm_st in enumerate(lstm_states):
                     self.lstm_states[i].append(lstm_st)
+
+
+    # def return_generated(self):
+    #     if self.model_config['padding'] == 'custom':
+    #         # un-pad
+    #         unpad_slice = self.padding_array.astype(int)[1:3]  # only width x height dims
+    #         unpad_slice[:, 1] = self.input_shape[:2] + unpad_slice[:,0]  # right end of slice = left-padding + input size
+    #         unpadded_gen_images = []
+    #         for gimg in self.gen_images:
+    #             unpadded_gen_images.append(gimg[..., unpad_slice[0, 0]:unpad_slice[0, 1], unpad_slice[1, 0]:unpad_slice[1, 1], :])
+    #     else:
+    #         unpadded_gen_images = self.gen_images
+    #     return unpadded_gen_images, self.gen_states
 
     def return_generated(self):
         return self.gen_images, self.gen_states
@@ -418,7 +471,7 @@ def stp_transformation(prev_image, stp_input, num_masks):
   return transformed
 
 
-def cdna_transformation(prev_image, cdna_input, num_masks, color_channels):
+def cdna_transformation(prev_image, cdna_input, num_masks, color_channels, return_transforms=False):
   """Apply convolutional dynamic neural advection to previous image.
 
   Args:
@@ -445,6 +498,7 @@ def cdna_transformation(prev_image, cdna_input, num_masks, color_channels):
   norm_factor = tf.reduce_sum(cdna_kerns, [1, 2, 3], keepdims=True)
   cdna_kerns /= norm_factor
 
+  cdna_kerns_unpadded = cdna_kerns[:,:,:,0,:]
   cdna_kerns = tf.tile(cdna_kerns, [1, 1, 1, color_channels, 1])
   cdna_kerns = tf.split(cdna_kerns, batch_size, 0)
   prev_images = tf.split(prev_image, batch_size, 0)
@@ -465,7 +519,10 @@ def cdna_transformation(prev_image, cdna_input, num_masks, color_channels):
         tf.nn.depthwise_conv2d(preimg, kernel, [1, 1, 1, 1], 'SAME'))
   transformed = tf.concat(transformed, 0)
   transformed = tf.split(transformed, num_masks, 3)
-  return transformed
+  if return_transforms:
+      return transformed, cdna_kerns_unpadded
+  else:
+      return transformed
 
 
 def dna_transformation(prev_image, dna_input):

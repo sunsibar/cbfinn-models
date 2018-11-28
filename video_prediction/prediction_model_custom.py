@@ -76,6 +76,7 @@ class CoreModel(object):
           self.schedule = schedule
 
           self.masks = []
+          self.kernels = tf.constant(0)
           self.transformed = []
 
           self.enc0, self.enc1, self.enc2, self.enc3, self.enc4, self.enc5, self.enc6, self.enc7 = [], [], [], [], [], [], [], []

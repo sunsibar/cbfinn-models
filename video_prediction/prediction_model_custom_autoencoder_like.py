@@ -142,6 +142,7 @@ class FramePredictorAutoencoderLike(object):
         self.lstm_size = np.int32(np.array(self.lstm_size))
         # variables storing stuff at each timestep
         self.masks = tf.constant(0)
+        self.kernels = tf.constant(0)
         self.encs = [[] for _ in range(n_pool_unpool)]
         self.hidden_layers = [[] for _ in range(n_layers)]
         self.lstm_states = [[] for _ in range(len(self.lstm_size))]
